@@ -95,6 +95,27 @@ a:hover {
     gap: 12px;
 }
 
+/* Sidebar toggle button (hidden on desktop) */
+.sidebar-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: var(--border-radius-sm);
+    line-height: 1;
+}
+.sidebar-toggle:hover {
+    background: rgba(255,255,255,0.08);
+}
+@media (max-width: 1024px) {
+    .sidebar-toggle {
+        display: block;
+    }
+}
+
 /* --- Rate Limit Indicator --- */
 .rate-indicator {
     font-size: 0.75rem;
@@ -698,7 +719,7 @@ a:hover {
     }
 
     .summary-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 
     .app-layout {
@@ -706,25 +727,261 @@ a:hover {
     }
 
     .sidebar {
-        position: static;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-        padding: 16px 20px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 260px;
+        height: 100vh;
+        z-index: 200;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        border-right: 1px solid var(--border-color);
+        border-bottom: none;
+        box-shadow: 2px 0 12px rgba(0,0,0,0.3);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    /* Overlay behind sidebar */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 199;
+    }
+
+    .sidebar-overlay.open {
+        display: block;
     }
 }
 
 @media (max-width: 768px) {
+    .site-header {
+        padding: 10px 14px;
+    }
+
     .site-title {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
+        gap: 4px;
+    }
+
+    .site-title .logo-icon {
+        font-size: 1.1rem;
+    }
+
+    .header-right {
+        gap: 8px;
+    }
+
+    .search-section {
+        margin-top: 20px;
+        padding: 0 14px;
     }
 
     .search-section h2 {
+        font-size: 1.15rem;
+    }
+
+    .search-section .subtitle {
+        font-size: 0.8rem;
+        margin-bottom: 14px;
+    }
+
+    .search-form {
+        flex-direction: row;
+        gap: 8px;
+    }
+
+    .btn-search {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+    }
+
+    .help-text {
+        font-size: 0.7rem;
+    }
+
+    .help-text br {
+        display: none;
+    }
+
+    .dashboard {
+        padding: 0 10px;
+    }
+
+    .section {
+        margin-bottom: 16px;
+    }
+
+    .section-title {
+        font-size: 1rem;
+        margin-bottom: 10px;
+    }
+
+    /* Summary */
+    .summary-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .summary-card {
+        padding: 12px 8px;
+    }
+
+    .card-icon {
         font-size: 1.3rem;
+        margin-bottom: 4px;
+    }
+
+    .card-value {
+        font-size: 1.15rem;
+    }
+
+    .card-label {
+        font-size: 0.7rem;
+    }
+
+    /* Player profile */
+    .player-profile {
+        padding: 16px;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .profile-avatar {
+        width: 52px;
+        height: 52px;
+        font-size: 1.5rem;
+    }
+
+    .profile-name {
+        font-size: 1.1rem;
+    }
+
+    .profile-meta {
+        font-size: 0.75rem;
+        gap: 8px;
+    }
+
+    .profile-rank .rank-name {
+        font-size: 0.85rem;
+    }
+
+    /* Sleep card */
+    .sleep-card {
+        padding: 16px;
+    }
+
+    .sleep-header {
+        margin-bottom: 12px;
+    }
+
+    .sleep-title {
+        font-size: 1rem;
+    }
+
+    .sleep-body {
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+    .sleep-score-ring {
+        width: 90px;
+        height: 90px;
+    }
+
+    .sleep-score-num {
+        font-size: 1.5rem;
+    }
+
+    .sleep-message {
+        padding: 12px 14px;
+    }
+
+    .sleep-message p {
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
+
+    .sleep-details {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        padding-top: 12px;
+    }
+
+    .detail-value {
+        font-size: 0.85rem;
+    }
+
+    /* Session advice */
+    .session-advice {
+        padding: 12px 14px;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .advice-emoji {
+        font-size: 1.6rem;
+    }
+
+    .advice-message {
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }
+
+    /* Chart containers */
+    .chart-container {
+        height: 220px;
+    }
+
+    /* Tables */
+    .data-table {
+        font-size: 0.78rem;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 7px 8px;
+    }
+
+    .hero-icon-sm {
+        width: 24px;
+        height: 14px;
+    }
+
+    .hero-count,
+    .match-count {
+        font-size: 0.7rem;
+    }
+
+    /* Hide less important columns on mobile */
+    .matches-table .col-xpm,
+    .matches-table .col-hero-dmg {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .site-title {
+        font-size: 0.85rem;
+    }
+
+    .search-section {
+        margin-top: 14px;
+    }
+
+    .search-section h2 {
+        font-size: 1.05rem;
     }
 
     .search-form {
         flex-direction: column;
-        gap: 10px;
+        gap: 6px;
     }
 
     .btn-search {
@@ -732,59 +989,91 @@ a:hover {
         justify-content: center;
     }
 
+    .search-input {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+
     .summary-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
+        gap: 6px;
     }
 
     .summary-card {
-        padding: 14px;
+        padding: 10px 6px;
     }
 
     .card-value {
-        font-size: 1.4rem;
+        font-size: 1.05rem;
     }
 
     .player-profile {
-        flex-direction: column;
-        text-align: center;
+        padding: 12px;
+        gap: 10px;
     }
 
-    .profile-rank {
-        margin-top: 8px;
-    }
-
-    .app-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .sleep-body {
-        flex-direction: column;
-        align-items: center;
-    }
-}
-
-@media (max-width: 480px) {
-    .summary-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-
-    .card-value {
+    .profile-avatar {
+        width: 44px;
+        height: 44px;
         font-size: 1.2rem;
     }
 
-    .card-label {
-        font-size: 0.75rem;
+    .profile-name {
+        font-size: 1rem;
     }
 
     .data-table {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
     }
 
     .data-table th,
     .data-table td {
-        padding: 6px 8px;
+        padding: 5px 6px;
+    }
+
+    .hero-icon-sm {
+        width: 20px;
+        height: 12px;
+    }
+
+    .hero-cell span {
+        max-width: 50px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Hide more columns on very small screens */
+    .matches-table .col-gpm,
+    .matches-table .col-duration {
+        display: none;
+    }
+
+    .hero-table .col-gpm,
+    .hero-table .col-xpm {
+        display: none;
+    }
+
+    .sleep-details {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .session-advice {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .sleep-body {
+        flex-direction: column;
+    }
+
+    .chart-container {
+        height: 180px;
+    }
+
+    .site-footer {
+        font-size: 0.65rem;
+        padding: 14px 10px;
     }
 }
 
@@ -839,6 +1128,56 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+    transition: color 0.15s;
+}
+
+.collapsible-header:hover {
+    color: var(--text-secondary);
+}
+
+.collapse-arrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    margin-right: 4px;
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+}
+
+.collapse-arrow.open {
+    transform: rotate(-90deg);
+}
+
+.collapsible-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.2s ease;
+}
+
+.collapsible-body.open {
+    max-height: 600px;
+    opacity: 1;
+}
+
+.note-input {
+    max-width: 100px;
+    font-size: 0.7rem;
+}
+
+.player-item-display {
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
 }
 
 .player-item {

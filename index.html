@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>睡了么 — 中老年加速模式玩家睡眠分析</title>
+    <title>睡了么 — 加速模式中登玩家睡眠分析</title>
     <meta name="description" content="分析 Dota2 加速模式玩家的睡眠质量。">
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
@@ -13,6 +13,7 @@
     <!-- Header -->
     <header class="site-header">
         <div class="header-inner">
+            <button class="sidebar-toggle" id="sidebar-toggle" aria-label="菜单">☰</button>
             <div class="site-title">
                 <span class="logo-icon">😴</span>
                 <span>睡了么</span>
@@ -23,10 +24,13 @@
         </div>
     </header>
 
+    <!-- Sidebar overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <!-- Main Layout -->
     <div class="app-layout">
         <!-- Sidebar: Player List -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div id="player-list"></div>
         </aside>
 

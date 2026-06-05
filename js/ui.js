@@ -685,50 +685,69 @@ export function renderPlayerList(containerId, playerList, callbacks) {
 
     const { myId, enemyIds } = playerList;
 
+    // Preserve collapse state
+    const wasMyOpen = document.getElementById('collapse-my')?.classList.contains('open');
+    const wasEnemyOpen = document.getElementById('collapse-enemy')?.classList.contains('open');
+
     container.innerHTML = `
         <div class="player-list-panel">
+            <!-- 本人 Section -->
             <div class="player-list-section">
-                <div class="player-list-label">👤 本人</div>
-                ${myId ? `
-                    <div class="player-item my-player" data-action="select-my">
-                        <span class="player-item-id">${escapeHtml(myId)}</span>
-                        <span class="player-item-badge me">我</span>
+                <div class="player-list-label collapsible-header" data-action="toggle-collapse" data-target="collapse-my">
+                    <span class="collapse-arrow ${wasMyOpen !== false ? 'open' : ''}" data-target="collapse-my">▾</span>
+                    👤 本人
+                </div>
+                <div class="collapsible-body ${wasMyOpen !== false ? 'open' : ''}" id="collapse-my">
+                    ${myId ? `
+                        <div class="player-item my-player" data-action="select-my">
+                            <span class="player-item-id">${escapeHtml(myId)}</span>
+                            <span class="player-item-badge me">我</span>
+                        </div>
+                    ` : `
+                        <div class="player-item no-player">
+                            <span class="player-item-hint">尚未设置</span>
+                        </div>
+                    `}
+                    <div class="player-id-input-row">
+                        <input type="text" class="player-id-input" id="my-id-input"
+                            placeholder="输入 Steam32 ID"
+                            inputmode="numeric" autocomplete="off"
+                            value="${escapeHtml(myId || '')}">
+                        <button class="btn btn-sm btn-set-my" data-action="set-my">设为本人</button>
                     </div>
-                ` : `
-                    <div class="player-item no-player">
-                        <span class="player-item-hint">尚未设置</span>
-                    </div>
-                `}
-                <div class="player-id-input-row">
-                    <input type="text" class="player-id-input" id="my-id-input"
-                        placeholder="输入 Steam32 ID"
-                        inputmode="numeric" autocomplete="off"
-                        value="${escapeHtml(myId || '')}">
-                    <button class="btn btn-sm btn-set-my" data-action="set-my">设为本人</button>
                 </div>
             </div>
 
+            <!-- 仇人 Section -->
             <div class="player-list-section">
-                <div class="player-list-label">😈 仇人列表</div>
-                ${enemyIds.length > 0 ? `
-                    <div class="enemy-list">
-                        ${enemyIds.map(id => `
-                            <div class="player-item enemy-item" data-player-id="${escapeHtml(id)}">
-                                <span class="player-item-id" data-action="select-enemy">${escapeHtml(id)}</span>
-                                <button class="btn-remove-enemy" data-action="remove-enemy" data-player-id="${escapeHtml(id)}" title="移除">✕</button>
-                            </div>
-                        `).join('')}
+                <div class="player-list-label collapsible-header" data-action="toggle-collapse" data-target="collapse-enemy">
+                    <span class="collapse-arrow ${wasEnemyOpen !== false ? 'open' : ''}" data-target="collapse-enemy">▾</span>
+                    😈 仇人列表
+                </div>
+                <div class="collapsible-body ${wasEnemyOpen !== false ? 'open' : ''}" id="collapse-enemy">
+                    ${enemyIds.length > 0 ? `
+                        <div class="enemy-list">
+                            ${enemyIds.map(e => `
+                                <div class="player-item enemy-item" data-player-id="${escapeHtml(e.id)}">
+                                    <span class="player-item-display" data-action="select-enemy">${escapeHtml(e.note || e.id)}</span>
+                                    <button class="btn-remove-enemy" data-action="remove-enemy" data-player-id="${escapeHtml(e.id)}" title="移除">✕</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="player-item no-player">
+                            <span class="player-item-hint">还没有仇人</span>
+                        </div>
+                    `}
+                    <div class="player-id-input-row">
+                        <input type="text" class="player-id-input" id="enemy-id-input"
+                            placeholder="仇人 Steam32 ID"
+                            inputmode="numeric" autocomplete="off">
+                        <input type="text" class="player-id-input note-input" id="enemy-note-input"
+                            placeholder="备注（可选）"
+                            autocomplete="off" maxlength="20">
+                        <button class="btn btn-sm btn-add-enemy-inline" data-action="add-enemy">添加</button>
                     </div>
-                ` : `
-                    <div class="player-item no-player">
-                        <span class="player-item-hint">还没有仇人</span>
-                    </div>
-                `}
-                <div class="player-id-input-row">
-                    <input type="text" class="player-id-input" id="enemy-id-input"
-                        placeholder="输入仇人 Steam32 ID"
-                        inputmode="numeric" autocomplete="off">
-                    <button class="btn btn-sm btn-add-enemy-inline" data-action="add-enemy">添加</button>
                 </div>
             </div>
 
@@ -743,6 +762,19 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         const target = e.target;
         const action = target.dataset.action;
         if (!action) return;
+
+        // Toggle collapse
+        if (action === 'toggle-collapse') {
+            const bodyId = target.dataset.target || target.closest('[data-target]')?.dataset?.target;
+            if (bodyId) {
+                const body = document.getElementById(bodyId);
+                const arrows = container.querySelectorAll(`[data-target="${bodyId}"]`);
+                if (body) {
+                    body.classList.toggle('open');
+                    arrows.forEach(a => a.classList.toggle('open'));
+                }
+            }
+        }
 
         // Select my player
         if (action === 'select-my' && myId && callbacks.onSelectMy) {
@@ -766,17 +798,21 @@ export function renderPlayerList(containerId, playerList, callbacks) {
 
         // Remove enemy
         if (action === 'remove-enemy') {
+            e.stopPropagation();
             const pid = target.dataset.playerId;
             if (pid && callbacks.onRemoveEnemy) callbacks.onRemoveEnemy(pid);
         }
 
-        // Add enemy from input
+        // Add enemy from inputs
         if (action === 'add-enemy') {
-            const input = document.getElementById('enemy-id-input');
-            const id = input?.value.trim();
+            const idInput = document.getElementById('enemy-id-input');
+            const noteInput = document.getElementById('enemy-note-input');
+            const id = idInput?.value.trim();
+            const note = noteInput?.value.trim();
             if (id && /^\d+$/.test(id) && callbacks.onAddEnemy) {
-                callbacks.onAddEnemy(id);
-                input.value = '';
+                callbacks.onAddEnemy(id, note || '');
+                if (idInput) idInput.value = '';
+                if (noteInput) noteInput.value = '';
             }
         }
 
@@ -786,7 +822,7 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         }
     });
 
-    // Enter key support on the inline inputs
+    // Enter key support
     document.getElementById('my-id-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -799,10 +835,14 @@ export function renderPlayerList(containerId, playerList, callbacks) {
     document.getElementById('enemy-id-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            const id = e.target.value.trim();
+            const idInput = document.getElementById('enemy-id-input');
+            const noteInput = document.getElementById('enemy-note-input');
+            const id = idInput?.value.trim();
+            const note = noteInput?.value.trim();
             if (id && /^\d+$/.test(id) && callbacks.onAddEnemy) {
-                callbacks.onAddEnemy(id);
-                e.target.value = '';
+                callbacks.onAddEnemy(id, note || '');
+                if (idInput) idInput.value = '';
+                if (noteInput) noteInput.value = '';
             }
         }
     });

@@ -88,7 +88,7 @@ export async function init() {
         onSelectMy: () => switchToMyPlayer(),
         onSelectEnemy: (id) => switchToEnemy(id),
         onSetMy: (id) => setMyId(id),
-        onAddEnemy: (id) => addEnemyId(id),
+        onAddEnemy: (id, note) => addEnemyId(id, note),
         onRemoveEnemy: (id) => removeEnemyId(id),
         onRefresh: () => refreshCurrentPlayer(),
     });
@@ -115,13 +115,20 @@ export async function init() {
 }
 
 // --- Player List Management ---
+// Data format: { myId: string, enemyIds: [{id: string, note: string}] }
+// Legacy format: { myId: string, enemyIds: string[] } — auto-migrated on load.
+
 function loadPlayerList() {
     try {
         const raw = localStorage.getItem(STORAGE_KEYS.PLAYER_LIST);
         if (raw) {
             const data = JSON.parse(raw);
             state.playerList.myId = data.myId || null;
-            state.playerList.enemyIds = data.enemyIds || [];
+            state.playerList.enemyIds = (data.enemyIds || []).map(e => {
+                // Migrate legacy string format → object format
+                if (typeof e === 'string') return { id: e, note: '' };
+                return e;
+            });
         }
     } catch {
         state.playerList = { myId: null, enemyIds: [] };
@@ -137,26 +144,25 @@ function savePlayerList() {
 function setMyId(id) {
     state.playerList.myId = String(id);
     // Remove from enemies if present
-    state.playerList.enemyIds = state.playerList.enemyIds.filter(eid => eid !== String(id));
+    state.playerList.enemyIds = state.playerList.enemyIds.filter(e => e.id !== String(id));
     savePlayerList();
     renderPlayerList('player-list', state.playerList, getListCallbacks());
     switchToMyPlayer();
 }
 
-function addEnemyId(id) {
+function addEnemyId(id, note) {
     const sid = String(id);
-    if (sid === state.playerList.myId) return; // Can't be enemy of yourself
-    if (state.playerList.enemyIds.includes(sid)) return; // Already added
-    state.playerList.enemyIds.push(sid);
+    if (sid === state.playerList.myId) return;
+    if (state.playerList.enemyIds.find(e => e.id === sid)) return;
+    state.playerList.enemyIds.push({ id: sid, note: (note || '').trim() });
     savePlayerList();
     renderPlayerList('player-list', state.playerList, getListCallbacks());
 }
 
 function removeEnemyId(id) {
-    state.playerList.enemyIds = state.playerList.enemyIds.filter(eid => eid !== String(id));
+    state.playerList.enemyIds = state.playerList.enemyIds.filter(e => e.id !== String(id));
     savePlayerList();
     renderPlayerList('player-list', state.playerList, getListCallbacks());
-    // If currently viewing this enemy, switch to my player
     if (state.isEnemy && state.currentViewId === String(id)) {
         switchToMyPlayer();
     }
@@ -167,7 +173,7 @@ function getListCallbacks() {
         onSelectMy: () => switchToMyPlayer(),
         onSelectEnemy: (id) => switchToEnemy(id),
         onSetMy: (id) => setMyId(id),
-        onAddEnemy: (id) => addEnemyId(id),
+        onAddEnemy: (id, note) => addEnemyId(id, note),
         onRemoveEnemy: (id) => removeEnemyId(id),
         onRefresh: () => refreshCurrentPlayer(),
     };
@@ -229,6 +235,9 @@ function setupEventListeners() {
         input.focus();
     }
 
+    // Sidebar toggle for mobile
+    setupSidebarToggle();
+
     // Window resize → redraw charts
     let resizeTimer;
     window.addEventListener('resize', () => {
@@ -247,6 +256,34 @@ function setupEventListeners() {
             document.getElementById('search-input').value = id;
             handleSearch();
         }
+    });
+}
+
+function setupSidebarToggle() {
+    const toggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    if (!toggle || !sidebar || !overlay) return;
+
+    function open() {
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+    }
+    function close() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+    }
+
+    toggle.addEventListener('click', () => {
+        sidebar.classList.contains('open') ? close() : open();
+    });
+
+    overlay.addEventListener('click', close);
+
+    // Close sidebar on window resize to desktop
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 1024) close();
     });
 }
 
@@ -279,7 +316,7 @@ async function handleSearch() {
     if (state.isLoading) return;
 
     // Check if this is an enemy
-    const isEnemy = state.playerList.enemyIds.includes(String(accountId));
+    const isEnemy = state.playerList.enemyIds.some(e => e.id === String(accountId));
     state.isEnemy = isEnemy;
 
     await loadDashboard(accountId, isEnemy);
