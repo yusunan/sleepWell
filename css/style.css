@@ -734,6 +734,7 @@ a:hover {
         height: 100vh;
         height: 100dvh;
         z-index: 200;
+        background: var(--bg-secondary);
         transform: translateX(-100%);
         transition: transform 0.25s ease;
         border-right: 1px solid var(--border-color);
