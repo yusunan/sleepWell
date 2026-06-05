@@ -6,13 +6,14 @@ import { VALIDATION, STEAM_ID_OFFSET, TURBO_MODES } from './config.js';
 import { STORAGE_KEYS, CACHE_VERSION } from './config.js';
 import { clearAll } from './storage.js';
 import { enrichHeroMapWithChinese } from './heroNames.js';
-import { evaluateSleep, getSleepMessage, getCurrentSessionAdvice } from './sleep.js';
+import { evaluateSleep, getSleepMessage, getCurrentSessionAdvice, isPlayerInactive } from './sleep.js';
 import {
     getHeroes,
     getPlayer,
     getRecentMatches,
     getTurboCounts,
     fetchTurboStats,
+    getPeers,
     getRateLimitStatus,
     cancelAll,
     PlayerNotFoundError,
@@ -25,6 +26,7 @@ import {
     renderTurboSummary,
     renderHeroTable,
     renderRecentMatches,
+    renderPeersTable,
     renderRateLimitIndicator,
     renderFullDashboard,
     renderChartCanvases,
@@ -37,8 +39,10 @@ import {
     renderPlayerList,
     renderSleepCard,
     renderSessionAdvice,
+    renderTeammateInactiveCard,
     renderPatchSelector,
     setEnemyHighlight,
+    setTeammateHighlight,
 } from './ui.js';
 import {
     createWinRateTrend,
@@ -50,6 +54,7 @@ import {
 const state = {
     currentViewId: null,
     isEnemy: false,
+    isTeammate: false,
     isLoading: false,
     heroMap: null,
     profile: null,
@@ -59,7 +64,7 @@ const state = {
     allRecentMatches: [],    // All recent matches (for sleep eval)
     sleepEval: null,
     charts: {},
-    playerList: { myId: null, enemyIds: [] },
+    playerList: { myId: null, enemyIds: [], teammateIds: [] },
     selectedPatch: null,
     availablePatches: [],
 };
@@ -104,8 +109,9 @@ function loadPlayerList() {
             const data = JSON.parse(raw);
             state.playerList.myId = data.myId || null;
             state.playerList.enemyIds = (data.enemyIds || []).map(e => typeof e === 'string' ? { id: e, note: '' } : e);
+            state.playerList.teammateIds = (data.teammateIds || []).map(e => typeof e === 'string' ? { id: e, note: '' } : e);
         }
-    } catch { state.playerList = { myId: null, enemyIds: [] }; }
+    } catch { state.playerList = { myId: null, enemyIds: [], teammateIds: [] }; }
 }
 function savePlayerList() {
     try { localStorage.setItem(STORAGE_KEYS.PLAYER_LIST, JSON.stringify(state.playerList)); } catch {}
@@ -113,11 +119,13 @@ function savePlayerList() {
 function setMyId(id) {
     state.playerList.myId = String(id);
     state.playerList.enemyIds = state.playerList.enemyIds.filter(e => e.id !== String(id));
+    state.playerList.teammateIds = state.playerList.teammateIds.filter(e => e.id !== String(id));
     savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks()); switchToMyPlayer();
 }
 function addEnemyId(id, note) {
     const sid = String(id); if (sid === state.playerList.myId) return;
     if (state.playerList.enemyIds.find(e => e.id === sid)) return;
+    if (state.playerList.teammateIds.find(e => e.id === sid)) return;
     state.playerList.enemyIds.push({ id: sid, note: (note || '').trim() });
     savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks());
 }
@@ -126,19 +134,49 @@ function removeEnemyId(id) {
     savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks());
     if (state.isEnemy && state.currentViewId === String(id)) switchToMyPlayer();
 }
+function addTeammateId(id, note) {
+    const sid = String(id); if (sid === state.playerList.myId) return;
+    if (state.playerList.teammateIds.find(e => e.id === sid)) return;
+    if (state.playerList.enemyIds.find(e => e.id === sid)) return;
+    state.playerList.teammateIds.push({ id: sid, note: (note || '').trim() });
+    savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks());
+}
+function removeTeammateId(id) {
+    state.playerList.teammateIds = state.playerList.teammateIds.filter(e => e.id !== String(id));
+    savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks());
+    if (state.isTeammate && state.currentViewId === String(id)) switchToMyPlayer();
+}
 function getListCallbacks() {
     return {
         onSelectMy: () => switchToMyPlayer(),
         onSelectEnemy: (id) => switchToEnemy(id),
+        onSelectTeammate: (id) => switchToTeammate(id),
         onSetMy: (id) => setMyId(id),
         onAddEnemy: (id, note) => addEnemyId(id, note),
         onRemoveEnemy: (id) => removeEnemyId(id),
+        onAddTeammate: (id, note) => addTeammateId(id, note),
+        onRemoveTeammate: (id) => removeTeammateId(id),
         onRefresh: () => refreshCurrentPlayer(),
     };
 }
-function switchToMyPlayer() { if (state.playerList.myId) { state.isEnemy = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false); } }
-function switchToEnemy(id) { state.isEnemy = true; document.getElementById('search-input').value = id; loadDashboard(String(id), true); }
-function refreshCurrentPlayer() { if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false); }
+function switchToMyPlayer() { if (state.playerList.myId) { state.isEnemy = false; state.isTeammate = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false, false); } }
+function switchToEnemy(id) { state.isEnemy = true; state.isTeammate = false; document.getElementById('search-input').value = id; loadDashboard(String(id), true, false); }
+function switchToTeammate(id) { state.isEnemy = false; state.isTeammate = true; document.getElementById('search-input').value = id; loadDashboard(String(id), false, true); }
+function refreshCurrentPlayer() { if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
+
+async function loadPeers(accountId) {
+    try {
+        const peers = await getPeers(accountId);
+        if (peers && Array.isArray(peers)) {
+            renderPeersTable('peers-table-section', peers);
+        }
+    } catch (err) {
+        console.warn('[睡了么] Failed to load peers:', err.message);
+        // Silently hide peers section on error
+        const section = document.getElementById('peers-section');
+        if (section) section.style.display = 'none';
+    }
+}
 
 async function loadHeroMap() {
     const heroes = await getHeroes();
@@ -177,18 +215,24 @@ async function handleSearch() {
     if (rawValue.length >= 16 && rawValue.startsWith('7656119')) { try { accountId = String(BigInt(rawValue) - STEAM_ID_OFFSET); } catch { showInputError('search-input', '无效的 Steam ID'); return; } }
     if (state.isLoading) return;
     state.isEnemy = state.playerList.enemyIds.some(e => e.id === String(accountId));
-    await loadDashboard(accountId, state.isEnemy);
+    state.isTeammate = state.playerList.teammateIds.some(e => e.id === String(accountId));
+    await loadDashboard(accountId, state.isEnemy, state.isTeammate);
 }
 
 // --- Dashboard ---
-async function loadDashboard(accountId, isEnemy) {
+async function loadDashboard(accountId, isEnemy, isTeammate = false) {
     cancelAll();
-    state.currentViewId = accountId; state.isEnemy = isEnemy; state.isLoading = true;
+    state.currentViewId = accountId; state.isEnemy = isEnemy; state.isTeammate = isTeammate; state.isLoading = true;
     state.turboMatches = []; state.allRecentMatches = []; state.sleepEval = null;
     state.turboCounts = null; state.turboStats = null; state.selectedPatch = null; state.availablePatches = [];
 
     for (const [key, chart] of Object.entries(state.charts)) { destroyChart(chart); delete state.charts[key]; }
-    clearDashboard(); setEnemyHighlight(isEnemy);
+    clearDashboard();
+    if (isTeammate) {
+        setTeammateHighlight(true);
+    } else {
+        setEnemyHighlight(isEnemy);
+    }
     const dashboard = document.getElementById('dashboard'); if (dashboard) dashboard.classList.add('loaded');
     showLoading('summary-section', `正在加载 ${accountId} 的加速模式数据...`);
     showLoading('profile-section', ''); showLoading('sleep-section', ''); showLoading('matches-section', '');
@@ -196,7 +240,7 @@ async function loadDashboard(accountId, isEnemy) {
     updateRateLimitDisplay(); renderPlayerList('player-list', state.playerList, getListCallbacks());
 
     try {
-        console.log(`[睡了么] Loading for ${accountId} (enemy=${isEnemy})`);
+        console.log(`[睡了么] Loading for ${accountId} (enemy=${isEnemy}, teammate=${isTeammate})`);
 
         // Fetch profile + turbo counts/stats + recent matches
         let profile, turboCounts, turboStats, recentMatches;
@@ -241,20 +285,31 @@ async function loadDashboard(accountId, isEnemy) {
         }
         renderFullDashboard(profile, computedStats, state.heroMap, turboMatches);
 
-        const sessionAdvice = getCurrentSessionAdvice(state.allRecentMatches, state.heroMap);
-        if (sessionAdvice) renderSessionAdvice('session-advice-section', sessionAdvice, isEnemy);
-        if (state.sleepEval) {
-            renderSleepCard('sleep-section', state.sleepEval, getSleepMessage(state.sleepEval, isEnemy, state.heroMap), isEnemy);
+        // Check if this is an inactive teammate (>1 year no games)
+        if (isTeammate && isPlayerInactive(state.allRecentMatches)) {
+            renderTeammateInactiveCard('sleep-section');
+            // Clear session advice — no current session for inactive players
+            const adviceSection = document.getElementById('session-advice-section');
+            if (adviceSection) adviceSection.innerHTML = '';
+        } else {
+            const sessionAdvice = getCurrentSessionAdvice(state.allRecentMatches, state.heroMap, isTeammate);
+            if (sessionAdvice) renderSessionAdvice('session-advice-section', sessionAdvice, isEnemy, isTeammate);
+            if (state.sleepEval) {
+                renderSleepCard('sleep-section', state.sleepEval, getSleepMessage(state.sleepEval, isEnemy, state.heroMap, isTeammate), isEnemy, isTeammate);
+            }
         }
         renderChartCanvases(); createCharts(computedStats, turboMatches);
         updateRateLimitDisplay();
         console.log(`[睡了么] Done. Sleep score: ${state.sleepEval?.score}`);
 
+        // Fetch and render recent peers (non-blocking, independent of main dashboard)
+        loadPeers(accountId);
+
     } catch (err) {
         console.error('[睡了么] Error:', err);
-        if (err instanceof NetworkError) showNetworkError('dashboard', err.message, () => loadDashboard(accountId, isEnemy));
-        else if (err instanceof RateLimitError) showDashboardError('dashboard', 'API 请求配额已用尽，请稍后重试', () => loadDashboard(accountId, isEnemy));
-        else showDashboardError('dashboard', `加载失败: ${err.message}`, () => loadDashboard(accountId, isEnemy));
+        if (err instanceof NetworkError) showNetworkError('dashboard', err.message, () => loadDashboard(accountId, isEnemy, isTeammate));
+        else if (err instanceof RateLimitError) showDashboardError('dashboard', 'API 请求配额已用尽，请稍后重试', () => loadDashboard(accountId, isEnemy, isTeammate));
+        else showDashboardError('dashboard', `加载失败: ${err.message}`, () => loadDashboard(accountId, isEnemy, isTeammate));
         updateRateLimitDisplay();
     } finally { state.isLoading = false; }
 }

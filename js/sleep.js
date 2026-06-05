@@ -4,6 +4,24 @@
 
 const SLEEP_START_HOUR = 20;  // 20:00
 const SLEEP_END_HOUR = 2;     // 02:00 (next day)
+const INACTIVE_DAYS = 365;    // Consider player inactive if no match in this many days
+
+/**
+ * Check if a player appears inactive (no matches in over INACTIVE_DAYS).
+ * @param {Array} matches - Array of recent match objects
+ * @returns {boolean}
+ */
+export function isPlayerInactive(matches) {
+    if (!matches || matches.length === 0) return true;
+    // Find the most recent match
+    let latest = 0;
+    for (const m of matches) {
+        if (m.start_time > latest) latest = m.start_time;
+    }
+    if (latest === 0) return true;
+    const daysSince = (Date.now() / 1000 - latest) / 86400;
+    return daysSince > INACTIVE_DAYS;
+}
 
 /**
  * Evaluate sleep quality based on recent matches.
@@ -182,6 +200,36 @@ const NO_GAME_CRITICAL = [
     '没打游戏的一天...那今天上线继续送吗？',
 ];
 
+// --- Teammate Messages (调侃、阴阳怪气) ---
+const TEAMMATE_MESSAGES = {
+    excellent: [
+        '哟，昨晚睡得挺早嘛，是不是又躺赢了不好意思说？ 😏',
+        '早睡早起身体好，可惜早起也救不了你的操作呀 🤣',
+        '睡得不错！梦里是不是也在想怎么不被我嘲讽？',
+    ],
+    good: [
+        '还行还行，睡眠质量及格了，游戏质量嘛...咳咳，不说了 🙊',
+        '睡得还行，但别以为早睡就能变强，该菜还是菜 🤷',
+        '马马虎虎的睡眠，配马马虎虎的技术，挺搭的哈',
+    ],
+    poor: [
+        '又熬夜打Dota？这么努力是想偷偷超过我吗？可惜方向不对啊兄弟 😂',
+        '大半夜不睡觉搁这打游戏，明天上线继续坑我是吧？',
+        '睡这么晚，难怪操作那么下饭...要不要考虑换个游戏？ 🍚',
+    ],
+    terrible: [
+        '通宵狂打！这股劲头用在工作上你早发财了 💼',
+        '凌晨还在打...你这操作对得起你的黑眼圈吗？😂',
+        '天都快亮了还搁那打Dota，我愿称你为最强修仙选手 🧘',
+    ],
+};
+
+const NO_GAME_TEAMMATE = [
+    '昨晚居然没上线？是不是怕坑我被我发现？😏',
+    '昨晚挂机了？难得啊，是不是女朋友查岗了 👀',
+    '哟，昨天没打游戏？改邪归正了？我不信 🤨',
+];
+
 /**
  * Get a random message from an array.
  */
@@ -197,12 +245,21 @@ function pick(arr) {
  * @param {Map} heroMap - Hero map for hero names
  * @returns {string} Evaluation message
  */
-export function getSleepMessage(evalResult, isEnemy, heroMap) {
+export function getSleepMessage(evalResult, isEnemy, heroMap, isTeammate = false) {
     const { quality, lastMatch, matchCount, timeStr, isWin, kda } = evalResult;
-    const messages = isEnemy ? CRITICAL_MESSAGES : GENTLE_MESSAGES;
+
+    let messages;
+    if (isTeammate) {
+        messages = TEAMMATE_MESSAGES;
+    } else if (isEnemy) {
+        messages = CRITICAL_MESSAGES;
+    } else {
+        messages = GENTLE_MESSAGES;
+    }
 
     // No games in sleep window
     if (matchCount === 0) {
+        if (isTeammate) return pick(NO_GAME_TEAMMATE);
         return pick(isEnemy ? NO_GAME_CRITICAL : NO_GAME_GENTLE);
     }
 
@@ -212,7 +269,15 @@ export function getSleepMessage(evalResult, isEnemy, heroMap) {
         : '英雄';
 
     let detail = '';
-    if (isEnemy) {
+    if (isTeammate) {
+        // Teasing/sarcastic tone
+        const winText = isWin ? '居然赢了' : '果然又输了';
+        detail = `最后一把${heroName}打到${timeStr}，${winText}，KDA ${kda}。`;
+        if (isWin && kda >= 5) detail += '可以啊，这把是你C的吧？还是对面太菜？ 🤔';
+        else if (isWin && kda < 2) detail += '赢是赢了，但这KDA...躺得舒服吗？ 🛌';
+        else if (!isWin && kda >= 3) detail += '数据还行咋还输了？是不是队友坑你？哦不对，你就是那个队友 😂';
+        else if (!isWin) detail += '这数据...我觉得不是队友的问题 🤡';
+    } else if (isEnemy) {
         // Critical tone — include match details
         const winText = isWin ? '侥幸获胜' : '被人爆锤';
         detail = `最后一把${heroName}打到${timeStr}，${winText}，KDA ${kda}。`;
@@ -281,7 +346,7 @@ export function getSleepLabel(quality) {
  * @param {Map} heroMap
  * @returns {Object|null} { emoji, message } or null if not in sleep window / no matches
  */
-export function getCurrentSessionAdvice(matches, heroMap) {
+export function getCurrentSessionAdvice(matches, heroMap, isTeammate = false) {
     const now = new Date();
     const hour = now.getHours();
 
@@ -328,27 +393,53 @@ export function getCurrentSessionAdvice(matches, heroMap) {
 
     let emoji, message;
 
-    if (isWin) {
-        if (hour < 23) {
-            emoji = '🌟';
-            message = `${heroName} 在 ${timeStr} 赢了！见好就收，带着胜利的喜悦早点休息吧~`;
-        } else if (hour < 1) {
-            emoji = '🌙';
-            message = `${heroName} 在 ${timeStr} 拿下一胜！很晚了，带着这份开心入睡吧，明天继续连胜！`;
+    if (isTeammate) {
+        if (isWin) {
+            if (hour < 23) {
+                emoji = '😏';
+                message = `${heroName} 在 ${timeStr} 赢了！见好就收吧，别等会又输了赖队友~`;
+            } else if (hour < 1) {
+                emoji = '🌚';
+                message = `${heroName} 在 ${timeStr} 拿下一胜！这么晚了，是不是该睡觉了？明天还要继续坑我呢`;
+            } else {
+                emoji = '🫠';
+                message = `${heroName} 在 ${timeStr} 赢了...凌晨了兄弟，赢了就赶紧睡，别贪！`;
+            }
         } else {
-            emoji = '✨';
-            message = `${heroName} 在 ${timeStr} 赢了！不过已经凌晨了，赶紧睡！明天状态更好~`;
+            if (hour < 23) {
+                emoji = '🤣';
+                message = `${heroName} 在 ${timeStr} 输了...没事，反正输赢都是日常，再来一把继续送 😂`;
+            } else if (hour < 1) {
+                emoji = '🫣';
+                message = `${heroName} 在 ${timeStr} 输了...这么晚了还输，心疼你一秒钟，要不明天再战？`;
+            } else {
+                emoji = '💀';
+                message = `${heroName} 在 ${timeStr} 输了...凌晨还在输！兄弟要不要考虑一下卸载？开个玩笑，快去睡吧 😴`;
+            }
         }
     } else {
-        if (hour < 23) {
-            emoji = '💪';
-            message = `${heroName} 在 ${timeStr} 输了...别灰心，调整一下状态再来一把！`;
-        } else if (hour < 1) {
-            emoji = '🥺';
-            message = `${heroName} 在 ${timeStr} 输了...有点晚了，要不先休息？养足精神明天再战！`;
+        if (isWin) {
+            if (hour < 23) {
+                emoji = '🌟';
+                message = `${heroName} 在 ${timeStr} 赢了！见好就收，带着胜利的喜悦早点休息吧~`;
+            } else if (hour < 1) {
+                emoji = '🌙';
+                message = `${heroName} 在 ${timeStr} 拿下一胜！很晚了，带着这份开心入睡吧，明天继续连胜！`;
+            } else {
+                emoji = '✨';
+                message = `${heroName} 在 ${timeStr} 赢了！不过已经凌晨了，赶紧睡！明天状态更好~`;
+            }
         } else {
-            emoji = '😤';
-            message = `${heroName} 在 ${timeStr} 输了...凌晨还输，太伤了！今天就到这吧，明天一定打回来！`;
+            if (hour < 23) {
+                emoji = '💪';
+                message = `${heroName} 在 ${timeStr} 输了...别灰心，调整一下状态再来一把！`;
+            } else if (hour < 1) {
+                emoji = '🥺';
+                message = `${heroName} 在 ${timeStr} 输了...有点晚了，要不先休息？养足精神明天再战！`;
+            } else {
+                emoji = '😤';
+                message = `${heroName} 在 ${timeStr} 输了...凌晨还输，太伤了！今天就到这吧，明天一定打回来！`;
+            }
         }
     }
 

@@ -31,7 +31,7 @@ export const STORAGE_KEYS = {
     PLAYER_PREFIX: 'dd2_player_',        // + accountId
     COUNTS_PREFIX: 'dd2_counts_',        // + accountId
     STATS_PREFIX: 'dd2_stats_',          // + accountId + '_' + mode
-    PLAYER_LIST: 'dd2_player_list',      // { myId: string, enemyIds: string[] }
+    PLAYER_LIST: 'dd2_player_list',      // { myId: string, enemyIds: [], teammateIds: [] }
     CACHE_VERSION: 'dd2_cache_version',  // number — bump to clear stale cache
 };
 

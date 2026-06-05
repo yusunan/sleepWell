@@ -404,6 +404,95 @@ function renderMatchRow(match, heroMap) {
     `;
 }
 
+// --- Recent Peers Table (last 90 days) ---
+
+/**
+ * Render the recent peers table.
+ * @param {string} containerId
+ * @param {Array} peers - Array of peer objects from /peers API
+ */
+export function renderPeersTable(containerId, peers) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!peers || peers.length === 0) {
+        const section = document.getElementById('peers-section');
+        if (section) section.style.display = 'none';
+        return;
+    }
+
+    const section = document.getElementById('peers-section');
+    if (section) section.style.display = '';
+
+    // Sort by games descending
+    const sorted = [...peers].sort((a, b) => (b.games || 0) - (a.games || 0));
+
+    container.innerHTML = `
+        <div class="peers-table-wrapper">
+            <table class="data-table peers-table">
+                <thead>
+                    <tr>
+                        <th>玩家</th>
+                        <th>总场次</th>
+                        <th>作为队友</th>
+                        <th>作为对手</th>
+                        <th>胜率（vs）</th>
+                        <th>最后同场</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sorted.map(p => renderPeerRow(p)).join('')}
+                </tbody>
+            </table>
+        </div>
+        <div class="peers-count">共 ${peers.length} 位玩家</div>
+    `;
+
+    // Click to navigate to peer's analysis
+    const rows = container.querySelectorAll('.peer-row');
+    rows.forEach(row => {
+        row.addEventListener('click', () => {
+            const aid = row.dataset.accountId;
+            if (aid) {
+                document.getElementById('search-input').value = aid;
+                document.getElementById('search-form')?.dispatchEvent(new Event('submit'));
+            }
+        });
+    });
+}
+
+function renderPeerRow(peer) {
+    const games = peer.games || 0;
+    const win = peer.win || 0;
+    const withGames = peer.with_games || 0;
+    const againstGames = peer.against_games || 0;
+    const winRate = games > 0 ? ((win / games) * 100).toFixed(1) : '0.0';
+    const wrClass = parseFloat(winRate) >= 55 ? 'wr-good' : parseFloat(winRate) >= 45 ? 'wr-avg' : 'wr-bad';
+
+    const lastPlayed = peer.last_played
+        ? formatRelativeTime(new Date(peer.last_played * 1000), new Date())
+        : '未知';
+
+    const name = peer.personaname || `玩家 ${peer.account_id}`;
+    const avatar = peer.avatar || '';
+
+    return `
+        <tr class="peer-row" data-account-id="${escapeHtml(String(peer.account_id))}">
+            <td class="col-peer-name">
+                <div class="peer-cell">
+                    ${avatar ? `<img src="${avatar}" alt="" class="peer-avatar" loading="lazy">` : '<span class="peer-avatar-fallback">?</span>'}
+                    <span>${escapeHtml(name)}</span>
+                </div>
+            </td>
+            <td class="col-games">${games}</td>
+            <td class="col-with">${withGames}</td>
+            <td class="col-against">${againstGames}</td>
+            <td class="col-winrate ${wrClass}">${winRate}%</td>
+            <td class="col-time">${lastPlayed}</td>
+        </tr>
+    `;
+}
+
 // --- Rate Limit Indicator ---
 
 export function renderRateLimitIndicator(containerId, status) {
@@ -610,12 +699,14 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
 
 export function clearDashboard() {
     showDashboard(false);
-    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'patch-selector-section', 'hero-table-section', 'matches-section'].forEach(id => {
+    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'patch-selector-section', 'hero-table-section', 'matches-section', 'peers-table-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
     });
     const chartSection = document.getElementById('charts-section');
     if (chartSection) chartSection.style.display = 'none';
+    const peersSection = document.getElementById('peers-section');
+    if (peersSection) peersSection.style.display = 'none';
 }
 
 /**
@@ -656,8 +747,22 @@ export function setEnemyHighlight(enabled) {
     if (dashboard) {
         if (enabled) {
             dashboard.classList.add('enemy-view');
+            dashboard.classList.remove('teammate-view');
         } else {
             dashboard.classList.remove('enemy-view');
+        }
+    }
+}
+
+export function setTeammateHighlight(enabled) {
+    isEnemyView = false;
+    const dashboard = document.getElementById('dashboard');
+    if (dashboard) {
+        if (enabled) {
+            dashboard.classList.add('teammate-view');
+            dashboard.classList.remove('enemy-view');
+        } else {
+            dashboard.classList.remove('teammate-view');
         }
     }
 }
@@ -672,10 +777,11 @@ export function renderPlayerList(containerId, playerList, callbacks) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const { myId, enemyIds } = playerList;
+    const { myId, enemyIds, teammateIds = [] } = playerList;
 
     // Preserve collapse state
     const wasMyOpen = document.getElementById('collapse-my')?.classList.contains('open');
+    const wasTeammateOpen = document.getElementById('collapse-teammate')?.classList.contains('open');
     const wasEnemyOpen = document.getElementById('collapse-enemy')?.classList.contains('open');
 
     container.innerHTML = `
@@ -703,6 +809,39 @@ export function renderPlayerList(containerId, playerList, callbacks) {
                             inputmode="numeric" autocomplete="off"
                             value="${escapeHtml(myId || '')}">
                         <button class="btn btn-sm btn-set-my" data-action="set-my">设为本人</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 队友 Section -->
+            <div class="player-list-section">
+                <div class="player-list-label collapsible-header" data-action="toggle-collapse" data-target="collapse-teammate">
+                    <span class="collapse-arrow ${wasTeammateOpen !== false ? 'open' : ''}" data-target="collapse-teammate">▾</span>
+                    🤝 我的队友
+                </div>
+                <div class="collapsible-body ${wasTeammateOpen !== false ? 'open' : ''}" id="collapse-teammate">
+                    ${teammateIds.length > 0 ? `
+                        <div class="teammate-list">
+                            ${teammateIds.map(e => `
+                                <div class="player-item teammate-item" data-player-id="${escapeHtml(e.id)}">
+                                    <span class="player-item-display" data-action="select-teammate">${escapeHtml(e.note || e.id)}</span>
+                                    <button class="btn-remove-teammate" data-action="remove-teammate" data-player-id="${escapeHtml(e.id)}" title="移除">✕</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="player-item no-player">
+                            <span class="player-item-hint">还没有队友</span>
+                        </div>
+                    `}
+                    <div class="player-id-input-row">
+                        <input type="text" class="player-id-input" id="teammate-id-input"
+                            placeholder="队友 Steam32 ID"
+                            inputmode="numeric" autocomplete="off">
+                        <input type="text" class="player-id-input note-input" id="teammate-note-input"
+                            placeholder="备注（可选）"
+                            autocomplete="off" maxlength="20">
+                        <button class="btn btn-sm btn-add-teammate-inline" data-action="add-teammate">添加</button>
                     </div>
                 </div>
             </div>
@@ -779,6 +918,32 @@ export function renderPlayerList(containerId, playerList, callbacks) {
             }
         }
 
+        // Select teammate
+        if (action === 'select-teammate') {
+            const pid = target.closest('.teammate-item')?.dataset.playerId;
+            if (pid && callbacks.onSelectTeammate) callbacks.onSelectTeammate(pid);
+        }
+
+        // Remove teammate
+        if (action === 'remove-teammate') {
+            e.stopPropagation();
+            const pid = target.dataset.playerId;
+            if (pid && callbacks.onRemoveTeammate) callbacks.onRemoveTeammate(pid);
+        }
+
+        // Add teammate from inputs
+        if (action === 'add-teammate') {
+            const idInput = document.getElementById('teammate-id-input');
+            const noteInput = document.getElementById('teammate-note-input');
+            const id = idInput?.value.trim();
+            const note = noteInput?.value.trim();
+            if (id && /^\d+$/.test(id) && callbacks.onAddTeammate) {
+                callbacks.onAddTeammate(id, note || '');
+                if (idInput) idInput.value = '';
+                if (noteInput) noteInput.value = '';
+            }
+        }
+
         // Select enemy
         if (action === 'select-enemy') {
             const pid = target.closest('.enemy-item')?.dataset.playerId;
@@ -821,6 +986,20 @@ export function renderPlayerList(containerId, playerList, callbacks) {
             }
         }
     });
+    document.getElementById('teammate-id-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const idInput = document.getElementById('teammate-id-input');
+            const noteInput = document.getElementById('teammate-note-input');
+            const id = idInput?.value.trim();
+            const note = noteInput?.value.trim();
+            if (id && /^\d+$/.test(id) && callbacks.onAddTeammate) {
+                callbacks.onAddTeammate(id, note || '');
+                if (idInput) idInput.value = '';
+                if (noteInput) noteInput.value = '';
+            }
+        }
+    });
     document.getElementById('enemy-id-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -850,7 +1029,7 @@ import { getSleepColor, getSleepEmoji, getSleepLabel } from './sleep.js';
  * @param {string} message - Sleep evaluation message
  * @param {boolean} isEnemy - Whether viewing an enemy
  */
-export function renderSleepCard(containerId, evalResult, message, isEnemy) {
+export function renderSleepCard(containerId, evalResult, message, isEnemy, isTeammate = false) {
     const container = document.getElementById(containerId);
     if (!container || !evalResult) return;
 
@@ -858,17 +1037,23 @@ export function renderSleepCard(containerId, evalResult, message, isEnemy) {
     const color = getSleepColor(quality);
     const emoji = getSleepEmoji(quality);
     const label = getSleepLabel(quality);
-    const cardClass = isEnemy ? 'sleep-card-enemy' : 'sleep-card-self';
+    let cardClass = 'sleep-card-self';
+    if (isTeammate) cardClass = 'sleep-card-teammate';
+    else if (isEnemy) cardClass = 'sleep-card-enemy';
 
     // Score ring: SVG circle
     const circumference = 2 * Math.PI * 45;
     const dashOffset = circumference - (score / 100) * circumference;
 
+    let titleText = '你的睡眠评估';
+    if (isTeammate) titleText = '队友睡眠评估';
+    else if (isEnemy) titleText = '仇人睡眠评估';
+
     container.innerHTML = `
         <div class="sleep-card ${cardClass}">
             <div class="sleep-header">
                 <span class="sleep-icon">${emoji}</span>
-                <h3 class="sleep-title">${isEnemy ? '仇人睡眠评估' : '你的睡眠评估'}</h3>
+                <h3 class="sleep-title">${titleText}</h3>
             </div>
 
             <div class="sleep-body">
@@ -925,6 +1110,35 @@ export function renderSleepCard(containerId, evalResult, message, isEnemy) {
 }
 
 // ============================================================
+// Teammate Inactive Card (队友超过1年未游戏)
+// ============================================================
+
+/**
+ * Render a special card when a teammate hasn't played in over a year.
+ * @param {string} containerId
+ */
+export function renderTeammateInactiveCard(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="sleep-card sleep-card-teammate sleep-card-inactive">
+            <div class="sleep-header">
+                <span class="sleep-icon">🕊️</span>
+                <h3 class="sleep-title">队友睡眠评估</h3>
+            </div>
+
+            <div class="sleep-body sleep-body-inactive">
+                <div class="inactive-message">
+                    <p class="inactive-text">你快回来，我一个人承受不来</p>
+                    <p class="inactive-sub">这位队友已经超过一年没有上线了...</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
 // Current Session Advice Banner (real-time during 20:00-02:00)
 // ============================================================
 
@@ -934,14 +1148,17 @@ export function renderSleepCard(containerId, evalResult, message, isEnemy) {
  * @param {object} advice - From getCurrentSessionAdvice()
  * @param {boolean} isEnemy
  */
-export function renderSessionAdvice(containerId, advice, isEnemy) {
+export function renderSessionAdvice(containerId, advice, isEnemy, isTeammate = false) {
     const container = document.getElementById(containerId);
     if (!container || !advice) return;
 
     const { emoji, message, isWin, matchCount } = advice;
 
     // Different styling based on tone
-    const toneClass = isEnemy ? 'advice-enemy' : (isWin ? 'advice-win' : 'advice-loss');
+    let toneClass = 'advice-win';
+    if (isTeammate) toneClass = 'advice-teammate';
+    else if (isEnemy) toneClass = 'advice-enemy';
+    else if (!isWin) toneClass = 'advice-loss';
 
     container.innerHTML = `
         <div class="session-advice ${toneClass}">

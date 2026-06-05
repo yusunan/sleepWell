@@ -294,3 +294,18 @@ export async function getTurboRecentMatches(accountId) {
     if (!Array.isArray(matches)) return [];
     return matches.filter(m => TURBO_MODES.includes(m.game_mode));
 }
+
+/**
+ * Get recent peers (players frequently matched with/against in the last 90 days).
+ * Only Turbo mode.
+ */
+export async function getPeers(accountId) {
+    return request(`/players/${accountId}/peers`, {
+        game_mode: 23,
+        significant: 0,
+        date: 90,
+    }, {
+        cacheKey: STORAGE_KEYS.STATS_PREFIX + accountId + '_turbo_peers',
+        cacheTtl: CACHE_TTL.STATS,
+    });
+}
