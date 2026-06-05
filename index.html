@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dota 2 加速模式数据分析</title>
+    <meta name="description" content="专注于 Dota 2 加速模式（Turbo）的个人数据分析工具。输入 Steam ID 即可查看加速模式的比赛数据、英雄表现、胜率趋势等。">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-inner">
+            <div class="site-title">
+                <span class="logo-icon">🏎️</span>
+                <span>Dota 2 Turbo 分析</span>
+            </div>
+            <div class="header-right">
+                <div id="rate-limit-indicator"></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Search Section -->
+    <section id="search-section" class="search-section">
+        <h2>加速模式数据分析</h2>
+        <p class="subtitle">输入 Steam32 ID，查看你的 Turbo 模式详细数据</p>
+        <form id="search-form" class="search-form">
+            <div class="input-wrapper">
+                <input
+                    type="text"
+                    id="search-input"
+                    class="search-input"
+                    placeholder="输入 Steam32 ID，例如 109005375"
+                    inputmode="numeric"
+                    autocomplete="off"
+                >
+            </div>
+            <button type="submit" class="btn btn-search">🔍 查询</button>
+        </form>
+        <p class="help-text">
+            提示：在 Dota 2 客户端主界面左上角可以找到你的 32 位好友 ID<br>
+            也可以在 OpenDota 网站搜索你的昵称获取 Steam32 ID
+        </p>
+    </section>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard">
+        <!-- Player Profile -->
+        <div id="profile-section" class="section"></div>
+
+        <!-- Turbo Summary -->
+        <div id="summary-section" class="section"></div>
+
+        <!-- Charts -->
+        <div id="charts-section" class="section" style="display:none;"></div>
+
+        <!-- Hero Performance -->
+        <div class="section">
+            <h3 class="section-title">英雄表现（加速模式）</h3>
+            <div id="hero-table-section"></div>
+        </div>
+
+        <!-- Recent Matches -->
+        <div class="section">
+            <h3 class="section-title">最近比赛（仅加速模式）</h3>
+            <div id="matches-section"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <p>
+            Dota 2 Turbo Analyzer v1.0 &nbsp;|&nbsp;
+            数据来源：<a href="https://www.opendota.com/" target="_blank" rel="noopener">OpenDota API</a> &nbsp;|&nbsp;
+            非官方工具，与 Valve 无关
+        </p>
+    </footer>
+
+    <!-- App Script -->
+    <script type="module">
+        import { init } from './js/app.js';
+        // Wait for DOM + Chart.js to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>

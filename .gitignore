@@ -1,0 +1,14 @@
+# Test data
+counts.json
+recentMatches.json
+
+# Playwright
+.playwright-cli/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
