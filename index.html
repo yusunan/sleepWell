@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dota 2 加速模式数据分析</title>
-    <meta name="description" content="专注于 Dota 2 加速模式（Turbo）的个人数据分析工具。输入 Steam ID 即可查看加速模式的比赛数据、英雄表现、胜率趋势等。">
+    <title>睡了么 — 中老年加速模式玩家睡眠分析</title>
+    <meta name="description" content="分析 Dota2 加速模式玩家的睡眠质量。">
     <link rel="stylesheet" href="css/style.css">
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -15,8 +14,8 @@
     <header class="site-header">
         <div class="header-inner">
             <div class="site-title">
-                <span class="logo-icon">🏎️</span>
-                <span>Dota 2 Turbo 分析</span>
+                <span class="logo-icon">😴</span>
+                <span>睡了么</span>
             </div>
             <div class="header-right">
                 <div id="rate-limit-indicator"></div>
@@ -24,66 +23,77 @@
         </div>
     </header>
 
-    <!-- Search Section -->
-    <section id="search-section" class="search-section">
-        <h2>加速模式数据分析</h2>
-        <p class="subtitle">输入 Steam32 ID，查看你的 Turbo 模式详细数据</p>
-        <form id="search-form" class="search-form">
-            <div class="input-wrapper">
-                <input
-                    type="text"
-                    id="search-input"
-                    class="search-input"
-                    placeholder="输入 Steam32 ID，例如 109005375"
-                    inputmode="numeric"
-                    autocomplete="off"
-                >
+    <!-- Main Layout -->
+    <div class="app-layout">
+        <!-- Sidebar: Player List -->
+        <aside class="sidebar">
+            <div id="player-list"></div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Search Section -->
+            <section id="search-section" class="search-section">
+                <h2>昨晚你睡好了吗？</h2>
+                <p class="subtitle">输入 Steam32 ID，根据你的游戏记录评估睡眠质量</p>
+                <form id="search-form" class="search-form">
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="search-input"
+                            class="search-input"
+                            placeholder="输入 Steam32 ID，例如 123456789"
+                            inputmode="numeric"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-search">🔍 查询</button>
+                </form>
+                <p class="help-text">
+                    每晚 20:00 ~ 次日 02:00 的游戏记录将被纳入睡眠评估
+                </p>
+            </section>
+
+            <!-- Dashboard -->
+            <div id="dashboard" class="dashboard">
+                <!-- Sleep Evaluation -->
+                <div id="sleep-section" class="section"></div>
+
+                <!-- Player Profile -->
+                <div id="profile-section" class="section"></div>
+
+                <!-- Turbo Summary -->
+                <div id="summary-section" class="section"></div>
+
+                <!-- Charts -->
+                <div id="charts-section" class="section" style="display:none;"></div>
+
+                <!-- Hero Performance -->
+                <div class="section">
+                    <h3 class="section-title">英雄表现（加速模式）</h3>
+                    <div id="hero-table-section"></div>
+                </div>
+
+                <!-- Recent Matches -->
+                <div class="section">
+                    <h3 class="section-title">最近比赛（仅加速模式）</h3>
+                    <div id="matches-section"></div>
+                </div>
             </div>
-            <button type="submit" class="btn btn-search">🔍 查询</button>
-        </form>
-        <p class="help-text">
-            提示：在 Dota 2 客户端主界面左上角可以找到你的 32 位好友 ID<br>
-            也可以在 OpenDota 网站搜索你的昵称获取 Steam32 ID
-        </p>
-    </section>
-
-    <!-- Dashboard -->
-    <div id="dashboard" class="dashboard">
-        <!-- Player Profile -->
-        <div id="profile-section" class="section"></div>
-
-        <!-- Turbo Summary -->
-        <div id="summary-section" class="section"></div>
-
-        <!-- Charts -->
-        <div id="charts-section" class="section" style="display:none;"></div>
-
-        <!-- Hero Performance -->
-        <div class="section">
-            <h3 class="section-title">英雄表现（加速模式）</h3>
-            <div id="hero-table-section"></div>
-        </div>
-
-        <!-- Recent Matches -->
-        <div class="section">
-            <h3 class="section-title">最近比赛（仅加速模式）</h3>
-            <div id="matches-section"></div>
-        </div>
+        </main>
     </div>
 
     <!-- Footer -->
     <footer class="site-footer">
         <p>
-            Dota 2 Turbo Analyzer v1.0 &nbsp;|&nbsp;
+            睡了么 v2.0 &nbsp;|&nbsp; 评分维度：最后游戏时间 · 胜负 · KDA &nbsp;|&nbsp;
             数据来源：<a href="https://www.opendota.com/" target="_blank" rel="noopener">OpenDota API</a> &nbsp;|&nbsp;
             非官方工具，与 Valve 无关
         </p>
     </footer>
 
-    <!-- App Script -->
     <script type="module">
         import { init } from './js/app.js';
-        // Wait for DOM + Chart.js to be ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {

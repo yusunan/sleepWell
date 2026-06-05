@@ -621,7 +621,7 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
 
 export function clearDashboard() {
     showDashboard(false);
-    ['profile-section', 'summary-section', 'hero-table-section', 'matches-section'].forEach(id => {
+    ['profile-section', 'sleep-section', 'summary-section', 'hero-table-section', 'matches-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
     });
@@ -651,6 +651,246 @@ export function renderChartCanvases() {
                     <canvas id="hero-perf-chart"></canvas>
                 </div>
             </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// Player List Sidebar
+// ============================================================
+
+export let isEnemyView = false;
+
+export function setEnemyHighlight(enabled) {
+    isEnemyView = enabled;
+    const dashboard = document.getElementById('dashboard');
+    if (dashboard) {
+        if (enabled) {
+            dashboard.classList.add('enemy-view');
+        } else {
+            dashboard.classList.remove('enemy-view');
+        }
+    }
+}
+
+/**
+ * Render the player list panel.
+ * @param {string} containerId
+ * @param {object} playerList - { myId, enemyIds }
+ * @param {object} callbacks - { onSelectMy, onSelectEnemy, onSetMy, onAddEnemy, onRemoveEnemy, onRefresh }
+ */
+export function renderPlayerList(containerId, playerList, callbacks) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const { myId, enemyIds } = playerList;
+
+    container.innerHTML = `
+        <div class="player-list-panel">
+            <div class="player-list-section">
+                <div class="player-list-label">👤 本人</div>
+                ${myId ? `
+                    <div class="player-item my-player" data-action="select-my">
+                        <span class="player-item-id">${escapeHtml(myId)}</span>
+                        <span class="player-item-badge me">我</span>
+                    </div>
+                ` : `
+                    <div class="player-item no-player">
+                        <span class="player-item-hint">尚未设置</span>
+                    </div>
+                `}
+                <div class="player-id-input-row">
+                    <input type="text" class="player-id-input" id="my-id-input"
+                        placeholder="输入 Steam32 ID"
+                        inputmode="numeric" autocomplete="off"
+                        value="${escapeHtml(myId || '')}">
+                    <button class="btn btn-sm btn-set-my" data-action="set-my">设为本人</button>
+                </div>
+            </div>
+
+            <div class="player-list-section">
+                <div class="player-list-label">😈 仇人列表</div>
+                ${enemyIds.length > 0 ? `
+                    <div class="enemy-list">
+                        ${enemyIds.map(id => `
+                            <div class="player-item enemy-item" data-player-id="${escapeHtml(id)}">
+                                <span class="player-item-id" data-action="select-enemy">${escapeHtml(id)}</span>
+                                <button class="btn-remove-enemy" data-action="remove-enemy" data-player-id="${escapeHtml(id)}" title="移除">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div class="player-item no-player">
+                        <span class="player-item-hint">还没有仇人</span>
+                    </div>
+                `}
+                <div class="player-id-input-row">
+                    <input type="text" class="player-id-input" id="enemy-id-input"
+                        placeholder="输入仇人 Steam32 ID"
+                        inputmode="numeric" autocomplete="off">
+                    <button class="btn btn-sm btn-add-enemy-inline" data-action="add-enemy">添加</button>
+                </div>
+            </div>
+
+            <div class="player-list-actions">
+                <button class="btn btn-sm btn-refresh" data-action="refresh">🔄 刷新</button>
+            </div>
+        </div>
+    `;
+
+    // Event delegation
+    container.addEventListener('click', (e) => {
+        const target = e.target;
+        const action = target.dataset.action;
+        if (!action) return;
+
+        // Select my player
+        if (action === 'select-my' && myId && callbacks.onSelectMy) {
+            callbacks.onSelectMy();
+        }
+
+        // Set my ID from input
+        if (action === 'set-my') {
+            const input = document.getElementById('my-id-input');
+            const id = input?.value.trim();
+            if (id && /^\d+$/.test(id) && callbacks.onSetMy) {
+                callbacks.onSetMy(id);
+            }
+        }
+
+        // Select enemy
+        if (action === 'select-enemy') {
+            const pid = target.closest('.enemy-item')?.dataset.playerId;
+            if (pid && callbacks.onSelectEnemy) callbacks.onSelectEnemy(pid);
+        }
+
+        // Remove enemy
+        if (action === 'remove-enemy') {
+            const pid = target.dataset.playerId;
+            if (pid && callbacks.onRemoveEnemy) callbacks.onRemoveEnemy(pid);
+        }
+
+        // Add enemy from input
+        if (action === 'add-enemy') {
+            const input = document.getElementById('enemy-id-input');
+            const id = input?.value.trim();
+            if (id && /^\d+$/.test(id) && callbacks.onAddEnemy) {
+                callbacks.onAddEnemy(id);
+                input.value = '';
+            }
+        }
+
+        // Refresh
+        if (action === 'refresh' && callbacks.onRefresh) {
+            callbacks.onRefresh();
+        }
+    });
+
+    // Enter key support on the inline inputs
+    document.getElementById('my-id-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const id = e.target.value.trim();
+            if (id && /^\d+$/.test(id) && callbacks.onSetMy) {
+                callbacks.onSetMy(id);
+            }
+        }
+    });
+    document.getElementById('enemy-id-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const id = e.target.value.trim();
+            if (id && /^\d+$/.test(id) && callbacks.onAddEnemy) {
+                callbacks.onAddEnemy(id);
+                e.target.value = '';
+            }
+        }
+    });
+}
+
+// ============================================================
+// Sleep Evaluation Card
+// ============================================================
+
+import { getSleepColor, getSleepEmoji, getSleepLabel } from './sleep.js';
+
+/**
+ * Render the sleep evaluation card.
+ * @param {string} containerId
+ * @param {object} evalResult - From evaluateSleep()
+ * @param {string} message - Sleep evaluation message
+ * @param {boolean} isEnemy - Whether viewing an enemy
+ */
+export function renderSleepCard(containerId, evalResult, message, isEnemy) {
+    const container = document.getElementById(containerId);
+    if (!container || !evalResult) return;
+
+    const { score, quality, lastMatch, matchCount, timeStr, isWin, kda } = evalResult;
+    const color = getSleepColor(quality);
+    const emoji = getSleepEmoji(quality);
+    const label = getSleepLabel(quality);
+    const cardClass = isEnemy ? 'sleep-card-enemy' : 'sleep-card-self';
+
+    // Score ring: SVG circle
+    const circumference = 2 * Math.PI * 45;
+    const dashOffset = circumference - (score / 100) * circumference;
+
+    container.innerHTML = `
+        <div class="sleep-card ${cardClass}">
+            <div class="sleep-header">
+                <span class="sleep-icon">${emoji}</span>
+                <h3 class="sleep-title">${isEnemy ? '仇人睡眠评估' : '你的睡眠评估'}</h3>
+            </div>
+
+            <div class="sleep-body">
+                <div class="sleep-score-ring">
+                    <svg viewBox="0 0 120 120" class="sleep-ring-svg">
+                        <circle cx="60" cy="60" r="45" class="sleep-ring-bg" />
+                        <circle cx="60" cy="60" r="45"
+                            class="sleep-ring-fg"
+                            stroke="${color}"
+                            stroke-dasharray="${circumference}"
+                            stroke-dashoffset="${dashOffset}"
+                            transform="rotate(-90 60 60)" />
+                    </svg>
+                    <div class="sleep-score-text">
+                        <span class="sleep-score-num" style="color:${color}">${score}</span>
+                        <span class="sleep-score-label">${label}</span>
+                    </div>
+                </div>
+
+                <div class="sleep-message" style="border-left-color:${color}">
+                    <p>${escapeHtml(message)}</p>
+                </div>
+            </div>
+
+            ${lastMatch ? `
+            <div class="sleep-details">
+                <div class="sleep-detail-item">
+                    <span class="detail-label">最后一局时间</span>
+                    <span class="detail-value">${timeStr}</span>
+                </div>
+                <div class="sleep-detail-item">
+                    <span class="detail-label">结果</span>
+                    <span class="detail-value ${isWin ? 'win' : 'loss'}">${isWin ? '胜利 ✅' : '失败 ❌'}</span>
+                </div>
+                <div class="sleep-detail-item">
+                    <span class="detail-label">KDA</span>
+                    <span class="detail-value">${kda}</span>
+                </div>
+                <div class="sleep-detail-item">
+                    <span class="detail-label">时段总局数</span>
+                    <span class="detail-value">${matchCount} 场</span>
+                </div>
+            </div>
+            ` : `
+            <div class="sleep-details">
+                <div class="sleep-detail-item">
+                    <span class="detail-label">时段总局数</span>
+                    <span class="detail-value">0 场</span>
+                </div>
+            </div>
+            `}
         </div>
     `;
 }

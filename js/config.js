@@ -31,6 +31,7 @@ export const STORAGE_KEYS = {
     PLAYER_PREFIX: 'dd2_player_',        // + accountId
     COUNTS_PREFIX: 'dd2_counts_',        // + accountId
     STATS_PREFIX: 'dd2_stats_',          // + accountId + '_' + mode
+    PLAYER_LIST: 'dd2_player_list',      // { myId: string, enemyIds: string[] }
 };
 
 /** Rate limit thresholds */
