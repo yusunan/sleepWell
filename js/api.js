@@ -252,6 +252,8 @@ export async function getHeroStats(accountId, gameMode) {
 
 /**
  * Get aggregated totals for a player, optionally filtered by game_mode.
+ * The API returns an array of { field, n, sum } objects.
+ * We convert it to a flat object like { kills: { n, sum }, deaths: { n, sum } }.
  */
 export async function getTotals(accountId, gameMode) {
     const params = {};
@@ -261,10 +263,23 @@ export async function getTotals(accountId, gameMode) {
     const cacheKey = gameMode != null
         ? STORAGE_KEYS.STATS_PREFIX + accountId + '_totals_' + gameMode
         : null;
-    return request(`/players/${accountId}/totals`, params, {
+    const raw = await request(`/players/${accountId}/totals`, params, {
         cacheKey,
         cacheTtl: CACHE_TTL.STATS,
     });
+    return convertTotalsArray(raw);
+}
+
+/**
+ * Convert totals from array format [{ field, n, sum }] to flat object.
+ */
+function convertTotalsArray(raw) {
+    if (!Array.isArray(raw)) return raw; // Already converted or unexpected format
+    const obj = {};
+    for (const item of raw) {
+        obj[item.field] = { n: item.n || 0, sum: item.sum || 0 };
+    }
+    return obj;
 }
 
 /**
@@ -396,11 +411,16 @@ function mergeTotals(results) {
     if (results.length === 0) return {};
     if (results.length === 1) return results[0];
 
+    // Each result is now a flat object like { kills: {n, sum}, deaths: {n, sum} }
     const merged = {};
     for (const r of results) {
-        for (const [key, value] of Object.entries(r)) {
-            if (typeof value === 'number') {
-                merged[key] = (merged[key] || 0) + value;
+        for (const [field, data] of Object.entries(r)) {
+            if (data && typeof data.n === 'number') {
+                if (!merged[field]) {
+                    merged[field] = { n: 0, sum: 0 };
+                }
+                merged[field].n += data.n;
+                merged[field].sum += data.sum;
             }
         }
     }

@@ -127,8 +127,8 @@ export function renderPlayerProfile(containerId, profile) {
 
     container.innerHTML = `
         <div class="player-profile">
-            <div class="profile-avatar">
-                ${avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(personaName)}" loading="lazy">` : '<div class="avatar-placeholder">?</div>'}
+            <div class="profile-avatar avatar-text">
+                ${escapeHtml(personaName[0] || '?')}
             </div>
             <div class="profile-info">
                 <h2 class="profile-name">${escapeHtml(personaName)}</h2>
@@ -621,7 +621,7 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
 
 export function clearDashboard() {
     showDashboard(false);
-    ['profile-section', 'sleep-section', 'summary-section', 'hero-table-section', 'matches-section'].forEach(id => {
+    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'hero-table-section', 'matches-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
     });
@@ -891,6 +891,36 @@ export function renderSleepCard(containerId, evalResult, message, isEnemy) {
                 </div>
             </div>
             `}
+        </div>
+    `;
+}
+
+// ============================================================
+// Current Session Advice Banner (real-time during 20:00-02:00)
+// ============================================================
+
+/**
+ * Render a prominent real-time advice banner for players currently in the sleep window.
+ * @param {string} containerId
+ * @param {object} advice - From getCurrentSessionAdvice()
+ * @param {boolean} isEnemy
+ */
+export function renderSessionAdvice(containerId, advice, isEnemy) {
+    const container = document.getElementById(containerId);
+    if (!container || !advice) return;
+
+    const { emoji, message, isWin, matchCount } = advice;
+
+    // Different styling based on tone
+    const toneClass = isEnemy ? 'advice-enemy' : (isWin ? 'advice-win' : 'advice-loss');
+
+    container.innerHTML = `
+        <div class="session-advice ${toneClass}">
+            <div class="advice-emoji">${emoji}</div>
+            <div class="advice-content">
+                <div class="advice-label">⏰ 实时提醒</div>
+                <p class="advice-message">${escapeHtml(message)}</p>
+            </div>
         </div>
     `;
 }

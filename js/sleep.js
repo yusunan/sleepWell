@@ -13,16 +13,33 @@ const SLEEP_END_HOUR = 2;     // 02:00 (next day)
  * @returns {Object} Evaluation result
  */
 export function evaluateSleep(matches, heroMap) {
-    // Filter to matches in the sleep window (20:00 - 02:00) over last 24h
     const now = new Date();
-    const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
+    // Determine the LAST COMPLETED sleep window.
+    // A sleep window always ends at 02:00. Find the most recent 02:00 that has passed.
+    const last2am = new Date(now);
+    last2am.setHours(2, 0, 0, 0);
+
+    if (now < last2am) {
+        // Before 02:00 today → the current window hasn't closed yet.
+        // Use yesterday's 02:00 (the last completed window).
+        last2am.setDate(last2am.getDate() - 1);
+    }
+
+    // Window start: 20:00 the day before last2am
+    // e.g., last2am = Tue 02:00 → start = Mon 20:00
+    const windowStart = new Date(last2am);
+    windowStart.setDate(windowStart.getDate() - 1);
+    windowStart.setHours(20, 0, 0, 0);
+
+    console.log(`[sleep] 评估窗口: ${windowStart.toLocaleString()} → ${last2am.toLocaleString()}`);
+    console.log(`[sleep] 当前时间: ${now.toLocaleString()}`);
+
+    // Filter matches within this exact window
     const sleepMatches = matches
         .filter(m => {
             const matchTime = new Date(m.start_time * 1000);
-            if (matchTime < cutoff) return false;
-            const hour = matchTime.getHours();
-            return hour >= SLEEP_START_HOUR || hour < SLEEP_END_HOUR;
+            return matchTime >= windowStart && matchTime <= last2am;
         })
         .sort((a, b) => a.start_time - b.start_time); // chronological
 
@@ -246,4 +263,99 @@ export function getSleepLabel(quality) {
         case 'terrible': return '严重缺觉';
         default: return '未知';
     }
+}
+
+// ============================================================
+// Current Session Advice (real-time during 20:00-02:00)
+// ============================================================
+
+/**
+ * Check if the player is currently in the sleep window (20:00-02:00).
+ * If yes, look at the last match in this ongoing session and give real-time advice:
+ * - Win → tell them to sleep on a high note
+ * - Loss + early → encourage them to keep trying
+ * - Loss + late → tell them to try again tomorrow
+ *
+ * @param {Array} matches - Recent matches
+ * @param {Map} heroMap
+ * @returns {Object|null} { emoji, message } or null if not in sleep window / no matches
+ */
+export function getCurrentSessionAdvice(matches, heroMap) {
+    const now = new Date();
+    const hour = now.getHours();
+
+    // Only active during sleep window (20:00-23:59 or 00:00-01:59)
+    if (hour < SLEEP_START_HOUR && hour >= SLEEP_END_HOUR) {
+        return null; // Outside sleep window
+    }
+
+    // Determine the CURRENT (potentially ongoing) sleep window
+    const today2am = new Date(now);
+    today2am.setHours(2, 0, 0, 0);
+
+    let windowStart;
+    if (now < today2am) {
+        // Before 02:00 — current window started yesterday 20:00
+        windowStart = new Date(today2am);
+        windowStart.setDate(windowStart.getDate() - 1);
+        windowStart.setHours(20, 0, 0, 0);
+    } else {
+        // After 20:00 — current window started today 20:00
+        windowStart = new Date(now);
+        windowStart.setHours(20, 0, 0, 0);
+    }
+
+    // Find matches in this current window
+    const sessionMatches = matches
+        .filter(m => {
+            const t = new Date(m.start_time * 1000);
+            return t >= windowStart && t <= now;
+        })
+        .sort((a, b) => a.start_time - b.start_time);
+
+    if (sessionMatches.length === 0) return null;
+
+    const lastMatch = sessionMatches[sessionMatches.length - 1];
+    const isWin = (lastMatch.player_slot < 128) === lastMatch.radiant_win;
+    const matchHour = new Date(lastMatch.start_time * 1000).getHours();
+    const matchMin = new Date(lastMatch.start_time * 1000).getMinutes();
+    const timeStr = `${String(matchHour).padStart(2, '0')}:${String(matchMin).padStart(2, '0')}`;
+
+    const heroName = heroMap
+        ? (heroMap.get(lastMatch.hero_id)?.localized_name || `英雄${lastMatch.hero_id}`)
+        : `英雄${lastMatch.hero_id}`;
+
+    let emoji, message;
+
+    if (isWin) {
+        if (hour < 23) {
+            emoji = '🌟';
+            message = `${heroName} 在 ${timeStr} 赢了！见好就收，带着胜利的喜悦早点休息吧~`;
+        } else if (hour < 1) {
+            emoji = '🌙';
+            message = `${heroName} 在 ${timeStr} 拿下一胜！很晚了，带着这份开心入睡吧，明天继续连胜！`;
+        } else {
+            emoji = '✨';
+            message = `${heroName} 在 ${timeStr} 赢了！不过已经凌晨了，赶紧睡！明天状态更好~`;
+        }
+    } else {
+        if (hour < 23) {
+            emoji = '💪';
+            message = `${heroName} 在 ${timeStr} 输了...别灰心，调整一下状态再来一把！`;
+        } else if (hour < 1) {
+            emoji = '🥺';
+            message = `${heroName} 在 ${timeStr} 输了...有点晚了，要不先休息？养足精神明天再战！`;
+        } else {
+            emoji = '😤';
+            message = `${heroName} 在 ${timeStr} 输了...凌晨还输，太伤了！今天就到这吧，明天一定打回来！`;
+        }
+    }
+
+    return {
+        emoji,
+        message,
+        isWin,
+        matchCount: sessionMatches.length,
+        timeStr,
+    };
 }

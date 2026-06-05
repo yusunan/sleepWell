@@ -76,12 +76,18 @@ export function remove(key) {
 /**
  * Remove all dd2-related keys from localStorage.
  */
+/**
+ * Clear all cached data, keeping player list intact.
+ */
 export function clearAll() {
     try {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith(NAMESPACE)) {
+            // Keep player list and cache version
+            if (key && key.startsWith(NAMESPACE)
+                && key !== 'dd2_player_list'
+                && key !== 'dd2_cache_version') {
                 keysToRemove.push(key);
             }
         }

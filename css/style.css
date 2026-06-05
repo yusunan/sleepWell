@@ -311,21 +311,14 @@ a:hover {
     border: 2px solid var(--border-color);
 }
 
-.profile-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.avatar-placeholder {
-    width: 100%;
-    height: 100%;
+.profile-avatar.avatar-text {
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 2rem;
-    background: var(--bg-input);
-    color: var(--text-muted);
+    font-weight: 700;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, #3a3d45, #4a4d55);
 }
 
 .profile-info {
@@ -1207,5 +1200,71 @@ a:hover {
 
 .dashboard.enemy-view .player-profile {
     border-color: rgba(244, 67, 54, 0.3);
+}
+
+/* ============================================================
+   Current Session Advice Banner
+   ============================================================ */
+
+.session-advice {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: var(--border-radius);
+    margin-bottom: 24px;
+    animation: adviceIn 0.5s ease;
+}
+
+@keyframes adviceIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.session-advice.advice-win {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.05));
+    border: 1px solid rgba(76, 175, 80, 0.25);
+}
+
+.session-advice.advice-loss {
+    background: linear-gradient(135deg, rgba(255, 152, 0, 0.12), rgba(255, 152, 0, 0.04));
+    border: 1px solid rgba(255, 152, 0, 0.25);
+}
+
+.session-advice.advice-enemy {
+    background: linear-gradient(135deg, rgba(244, 67, 54, 0.12), rgba(244, 67, 54, 0.04));
+    border: 1px solid rgba(244, 67, 54, 0.25);
+}
+
+.advice-emoji {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+.advice-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.advice-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.advice-message {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+    margin: 0;
 }
 

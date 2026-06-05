@@ -2,11 +2,12 @@
 // app.js — Main Controller for "睡了么" (SleepWell)
 // ============================================================
 
-import { VALIDATION, STEAM_ID_OFFSET, TURBO_MODES, MAX_DISPLAY_MATCHES } from './config.js';
+import { VALIDATION, STEAM_ID_OFFSET, TURBO_MODES, MAX_DISPLAY_MATCHES, CACHE_VERSION } from './config.js';
 import { STORAGE_KEYS } from './config.js';
 import { set as cacheSet, get as cacheGet } from './storage.js';
+import { clearAll } from './storage.js';
 import { enrichHeroMapWithChinese } from './heroNames.js';
-import { evaluateSleep, getSleepMessage, getSleepEmoji, getSleepColor, getSleepLabel } from './sleep.js';
+import { evaluateSleep, getSleepMessage, getSleepEmoji, getSleepColor, getSleepLabel, getCurrentSessionAdvice } from './sleep.js';
 import {
     getHeroes,
     getPlayer,
@@ -39,6 +40,7 @@ import {
     clearInputError,
     renderPlayerList,
     renderSleepCard,
+    renderSessionAdvice,
     setEnemyHighlight,
 } from './ui.js';
 import {
@@ -66,6 +68,14 @@ const state = {
 // --- Init ---
 export async function init() {
     console.log('[睡了么] Initializing...');
+
+    // Clear stale cache if version bumped
+    const cachedVersion = localStorage.getItem(STORAGE_KEYS.CACHE_VERSION);
+    if (cachedVersion !== String(CACHE_VERSION)) {
+        console.log(`[睡了么] Cache version changed (${cachedVersion} → ${CACHE_VERSION}), clearing...`);
+        clearAll();
+        localStorage.setItem(STORAGE_KEYS.CACHE_VERSION, String(CACHE_VERSION));
+    }
 
     // Setup event listeners immediately
     setupEventListeners();
@@ -361,8 +371,13 @@ async function loadDashboard(accountId, isEnemy) {
 
         // Step 5: Compute turbo stats
         const computedStats = computeTurboStats(turboStats, turboMatches);
-        if (computedStats.heroes.length === 0 && turboMatches.length > 0) {
-            computedStats.heroes = deriveHeroStatsFromMatches(turboMatches);
+
+        // The /heroes API only returns game counts and wins — no KDA/GPM/XPM.
+        // Replace with match-derived stats so all columns show consistent data.
+        // (API game counts are still available in the hero table as "场次" if needed.)
+        const derivedHeroes = deriveHeroStatsFromMatches(turboMatches);
+        if (derivedHeroes.length > 0) {
+            computedStats.heroes = derivedHeroes;
         }
         state.turboStats = computedStats;
 
@@ -371,6 +386,15 @@ async function loadDashboard(accountId, isEnemy) {
 
         // Step 7: Render
         renderFullDashboard(profile, computedStats, state.heroMap, turboMatches);
+
+        // Current session advice (real-time, only during 20:00-02:00)
+        const sessionAdvice = getCurrentSessionAdvice(state.allRecentMatches, state.heroMap);
+        if (sessionAdvice) {
+            renderSessionAdvice('session-advice-section', sessionAdvice, isEnemy);
+        } else {
+            const el = document.getElementById('session-advice-section');
+            if (el) el.innerHTML = '';
+        }
 
         // Sleep card
         if (state.sleepEval) {
@@ -410,12 +434,37 @@ function computeTurboStats(turboStats, matches) {
     const losses = wl.lose || 0;
     const totalGames = wins + losses;
     const winRate = totalGames > 0 ? (wins / totalGames * 100) : 0;
-    const gameCount = totals.field_count || totalGames || 1;
-    const avgKills = (totals.kills || 0) / gameCount;
-    const avgDeaths = (totals.deaths || 0) / gameCount;
-    const avgAssists = (totals.assists || 0) / gameCount;
-    const avgGpm = (totals.gold_per_min || 0) / gameCount;
-    const avgXpm = (totals.xp_per_min || 0) / gameCount;
+
+    // Totals is { field: { n, sum } } — compute per-game averages
+    function avg(field) {
+        const d = totals[field];
+        if (!d || !d.n) return 0;
+        return d.sum / d.n;
+    }
+    let avgKills = avg('kills');
+    let avgDeaths = avg('deaths');
+    let avgAssists = avg('assists');
+    let avgGpm = avg('gold_per_min');
+    let avgXpm = avg('xp_per_min');
+
+    // Fallback: if totals are missing (API /totals failed or returned empty),
+    // compute averages from recent matches
+    if (avgGpm === 0 && avgXpm === 0 && matches.length > 0) {
+        let sumK = 0, sumD = 0, sumA = 0, sumGpm = 0, sumXpm = 0;
+        for (const m of matches) {
+            sumK += m.kills || 0;
+            sumD += m.deaths || 0;
+            sumA += m.assists || 0;
+            sumGpm += m.gold_per_min || 0;
+            sumXpm += m.xp_per_min || 0;
+        }
+        avgKills = sumK / matches.length;
+        avgDeaths = sumD / matches.length;
+        avgAssists = sumA / matches.length;
+        avgGpm = sumGpm / matches.length;
+        avgXpm = sumXpm / matches.length;
+    }
+
     const maxStreak = calculateMaxWinStreak(matches);
     return { totalGames, wins, losses, winRate, avgKills, avgDeaths, avgAssists, avgGpm, avgXpm, maxStreak, heroes: heroes || [], totals };
 }

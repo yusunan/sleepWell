@@ -32,7 +32,11 @@ export const STORAGE_KEYS = {
     COUNTS_PREFIX: 'dd2_counts_',        // + accountId
     STATS_PREFIX: 'dd2_stats_',          // + accountId + '_' + mode
     PLAYER_LIST: 'dd2_player_list',      // { myId: string, enemyIds: string[] }
+    CACHE_VERSION: 'dd2_cache_version',  // number — bump to clear stale cache
 };
+
+/** Current cache version — bump this to invalidate all cached API data */
+export const CACHE_VERSION = 2;
 
 /** Rate limit thresholds */
 export const RATE_LIMIT = {
