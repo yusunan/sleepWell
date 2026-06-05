@@ -1,80 +1,63 @@
 # 睡了么 — Dota 2 加速模式睡眠分析
 
-> 昨晚你睡好了吗？根据加速模式游戏记录，温柔评估睡眠质量。
+> 昨晚你睡好了吗？根据加速模式比赛记录，温柔评估睡眠质量。
 
 ## 功能
 
-- 😴 **睡眠评估**：根据每晚 20:00 ~ 次日 02:00 的最后一把比赛时间、胜负、KDA，综合评分 0-100
-- ⏰ **实时提醒**：在睡眠窗口内访问时，根据当前战绩给出即时建议（赢了劝睡、输了鼓励/劝退）
-- 👤 **本人/仇人管理**：保存自己的 ID 和多个仇人 ID，存储在浏览器中
+- 😴 **睡眠评估**：每晚 20:00 ~ 次日 02:00 的最后一把比赛时间、胜负、KDA，综合评分 0-100
+- ⏰ **实时提醒**：20:00-02:00 访问时，根据当前战绩即时建议（赢了劝睡 / 输了鼓励或劝退）
+- 👤 **本人/仇人管理**：ID+备注存储在浏览器 localStorage，支持折叠
 - 😈 **双面评价**：看自己用温柔安抚口吻，看仇人用批判嘲讽口吻
-- 📊 **加速模式数据**：总场次、胜率、场均 KDA/GPM/XPM、最长连胜
-- 🦸 **英雄表现**：可排序表格，展示各英雄的详细数据
-- 📈 **胜率趋势**：折线图展示近 20 场比赛胜率变化
+- 📊 **加速模式概览**：总场次、胜率、场均 KDA、平均 GPM/XPM、最长连胜、天辉/夜魇胜率、核心/辅助比
+- 📦 **版本筛选**：按 Patch 版本过滤，映射到游戏版本号（7.41 等）
+- 🦸 **英雄表现**：全历史英雄场次/胜率（来自 API），可排序
+- 📈 **胜率趋势**：近 20 场折线图
 - 📋 **比赛记录**：最近加速模式比赛列表
-- 📱 **移动端适配**：侧边栏折叠、响应式布局
+- 📱 **移动端适配**：侧边栏滑出式菜单、响应式布局
 
-## 使用方法
+## 使用
 
 ### 获取 Steam32 ID
 
-1. 打开 Dota 2 客户端，主界面左上角可以看到"好友 ID"（32 位数字）
-2. 或在 OpenDota 网站搜索你的昵称
-3. 或用 Steam64 ID（自动转换）
+1. Dota 2 客户端左上角"好友 ID"（32 位数字）
+2. 或在 OpenDota 搜索昵称
+3. 或输入 Steam64 ID（自动转换）
 
 ### 本地运行
 
 ```bash
 python3 -m http.server 8080
-# 访问 http://localhost:8080
+# http://localhost:8080
 ```
 
 ### 部署
 
-纯静态文件，可直接部署到：
-
-- **Cloudflare Pages**（推荐，国内访问快）：关联 GitHub 仓库即可
-- GitHub Pages：仓库 Settings → Pages → 选分支保存
-- 任意静态文件服务器
+纯静态文件 → Cloudflare Pages / GitHub Pages / 任意静态托管。
 
 ## 评分规则
 
+采样窗口：最近一个已结束的睡眠窗口（最近一次凌晨 2:00 → 前一天 20:00）。
+
 | 维度 | 权重 | 说明 |
 |------|------|------|
-| 最后游戏时间 | 50% | 20:00 = 100分，越接近 02:00 分越低 |
-| 胜负 | 25% | 赢 = 100分，输 = 0分 |
-| KDA | 25% | 2-5 最佳(100分)，<1 或 >10 都会扣分 |
-
-评分窗口：取最近一个已结束的睡眠窗口（最近一次凌晨 2:00 往前推到前一天 20:00）。
-
-## 技术栈
-
-- 纯前端（HTML + CSS + JavaScript ES Modules）
-- Chart.js v4（CDN）
-- OpenDota API（CORS 支持）
-- 零构建工具、零 npm 依赖
-
-## 文件结构
-
-```
-dd2/
-├── index.html          # 入口页面
-├── css/
-│   └── style.css       # 暗色主题 + 响应式
-├── js/
-│   ├── config.js       # 常量（API、段位、缓存版本）
-│   ├── storage.js      # localStorage 缓存层
-│   ├── api.js          # OpenDota API 客户端
-│   ├── heroNames.js    # 英雄中文名映射
-│   ├── sleep.js        # 睡眠评估引擎 + 话术模板
-│   ├── charts.js       # Chart.js 图表封装
-│   ├── ui.js           # DOM 渲染
-│   └── app.js          # 主控制器
-└── README.md
-```
+| 最后游戏时间 | 50% | 20:00=100，02:00=0 |
+| 胜负 | 25% | 赢=100，输=0 |
+| KDA | 25% | 2-5 最佳，<1 或 >10 扣分 |
 
 ## API
 
-数据来源：[OpenDota API](https://docs.opendota.com/)。GET 请求支持 CORS，免费版约每分钟 60 次请求。使用 localStorage 缓存减少重复请求。
+数据来源：[OpenDota API](https://docs.opendota.com/)。关键参数：`game_mode=23&significant=0` 过滤加速模式。
 
-加速模式同时查询 `game_mode=22` 和 `game_mode=23`，客户端合并数据。
+| 端点 | 用途 |
+|------|------|
+| `/players/{id}` | 玩家资料 |
+| `/players/{id}/recentMatches` | 最近比赛（含 mode=23 Turbo） |
+| `/players/{id}/counts?game_mode=23&significant=0` | 加速模式全维度统计 |
+| `/players/{id}/totals?game_mode=23&significant=0` | KDA/GPM/XPM |
+| `/players/{id}/wl?game_mode=23&significant=0` | 胜/负 |
+| `/players/{id}/heroes?game_mode=23&significant=0` | 英雄场次/胜率 |
+| `/heroes` | 英雄名称映射 |
+
+## 技术栈
+
+纯前端 · Chart.js v4 · OpenDota API · localStorage · ES Modules · 零构建工具

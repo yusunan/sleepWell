@@ -11,6 +11,8 @@ import {
     getHeroes,
     getPlayer,
     getRecentMatches,
+    getTurboCounts,
+    fetchTurboStats,
     getRateLimitStatus,
     cancelAll,
     PlayerNotFoundError,
@@ -35,6 +37,7 @@ import {
     renderPlayerList,
     renderSleepCard,
     renderSessionAdvice,
+    renderPatchSelector,
     setEnemyHighlight,
 } from './ui.js';
 import {
@@ -50,18 +53,21 @@ const state = {
     isLoading: false,
     heroMap: null,
     profile: null,
-    turboMatches: [],       // Recent Turbo matches (game_mode 22/23)
-    allRecentMatches: [],   // All recent matches (for sleep eval)
+    turboCounts: null,       // From /counts?game_mode=23&significant=0
+    turboStats: null,        // { wl, heroes, totals } from fetchTurboStats
+    turboMatches: [],        // Recent Turbo matches
+    allRecentMatches: [],    // All recent matches (for sleep eval)
     sleepEval: null,
     charts: {},
     playerList: { myId: null, enemyIds: [] },
+    selectedPatch: null,
+    availablePatches: [],
 };
 
 // --- Init ---
 export async function init() {
     console.log('[睡了么] Initializing...');
 
-    // Clear stale cache if version bumped
     const cachedVersion = localStorage.getItem(STORAGE_KEYS.CACHE_VERSION);
     if (cachedVersion !== String(CACHE_VERSION)) {
         console.log(`[睡了么] Cache version changed (${cachedVersion} → ${CACHE_VERSION}), clearing...`);
@@ -72,7 +78,6 @@ export async function init() {
     setupEventListeners();
     loadPlayerList();
     updateRateLimitDisplay();
-
     renderPlayerList('player-list', state.playerList, getListCallbacks());
 
     try {
@@ -88,7 +93,6 @@ export async function init() {
         if (input) input.value = state.playerList.myId;
         await loadDashboard(state.playerList.myId, false);
     }
-
     checkUrlHash();
 }
 
@@ -99,48 +103,29 @@ function loadPlayerList() {
         if (raw) {
             const data = JSON.parse(raw);
             state.playerList.myId = data.myId || null;
-            state.playerList.enemyIds = (data.enemyIds || []).map(e => {
-                if (typeof e === 'string') return { id: e, note: '' };
-                return e;
-            });
+            state.playerList.enemyIds = (data.enemyIds || []).map(e => typeof e === 'string' ? { id: e, note: '' } : e);
         }
-    } catch {
-        state.playerList = { myId: null, enemyIds: [] };
-    }
+    } catch { state.playerList = { myId: null, enemyIds: [] }; }
 }
-
 function savePlayerList() {
-    try {
-        localStorage.setItem(STORAGE_KEYS.PLAYER_LIST, JSON.stringify(state.playerList));
-    } catch { /* ignore */ }
+    try { localStorage.setItem(STORAGE_KEYS.PLAYER_LIST, JSON.stringify(state.playerList)); } catch {}
 }
-
 function setMyId(id) {
     state.playerList.myId = String(id);
     state.playerList.enemyIds = state.playerList.enemyIds.filter(e => e.id !== String(id));
-    savePlayerList();
-    renderPlayerList('player-list', state.playerList, getListCallbacks());
-    switchToMyPlayer();
+    savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks()); switchToMyPlayer();
 }
-
 function addEnemyId(id, note) {
-    const sid = String(id);
-    if (sid === state.playerList.myId) return;
+    const sid = String(id); if (sid === state.playerList.myId) return;
     if (state.playerList.enemyIds.find(e => e.id === sid)) return;
     state.playerList.enemyIds.push({ id: sid, note: (note || '').trim() });
-    savePlayerList();
-    renderPlayerList('player-list', state.playerList, getListCallbacks());
+    savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks());
 }
-
 function removeEnemyId(id) {
     state.playerList.enemyIds = state.playerList.enemyIds.filter(e => e.id !== String(id));
-    savePlayerList();
-    renderPlayerList('player-list', state.playerList, getListCallbacks());
-    if (state.isEnemy && state.currentViewId === String(id)) {
-        switchToMyPlayer();
-    }
+    savePlayerList(); renderPlayerList('player-list', state.playerList, getListCallbacks());
+    if (state.isEnemy && state.currentViewId === String(id)) switchToMyPlayer();
 }
-
 function getListCallbacks() {
     return {
         onSelectMy: () => switchToMyPlayer(),
@@ -151,42 +136,14 @@ function getListCallbacks() {
         onRefresh: () => refreshCurrentPlayer(),
     };
 }
+function switchToMyPlayer() { if (state.playerList.myId) { state.isEnemy = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false); } }
+function switchToEnemy(id) { state.isEnemy = true; document.getElementById('search-input').value = id; loadDashboard(String(id), true); }
+function refreshCurrentPlayer() { if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false); }
 
-function switchToMyPlayer() {
-    if (!state.playerList.myId) return;
-    state.isEnemy = false;
-    document.getElementById('search-input').value = state.playerList.myId;
-    loadDashboard(state.playerList.myId, false);
-}
-
-function switchToEnemy(id) {
-    state.isEnemy = true;
-    document.getElementById('search-input').value = id;
-    loadDashboard(String(id), true);
-}
-
-function refreshCurrentPlayer() {
-    if (state.currentViewId) {
-        loadDashboard(state.currentViewId, state.isEnemy);
-    } else if (state.playerList.myId) {
-        loadDashboard(state.playerList.myId, false);
-    }
-}
-
-// --- Hero Map ---
 async function loadHeroMap() {
     const heroes = await getHeroes();
     const map = new Map();
-    for (const hero of heroes) {
-        map.set(hero.id, {
-            name: hero.name.replace('npc_dota_hero_', ''),
-            localized_name: hero.localized_name,
-            img: hero.img,
-            icon: hero.icon,
-            primary_attr: hero.primary_attr,
-            attack_type: hero.attack_type,
-        });
-    }
+    for (const hero of heroes) map.set(hero.id, { name: hero.name.replace('npc_dota_hero_', ''), localized_name: hero.localized_name, img: hero.img, icon: hero.icon, primary_attr: hero.primary_attr, attack_type: hero.attack_type });
     return enrichHeroMapWithChinese(map);
 }
 
@@ -194,43 +151,16 @@ async function loadHeroMap() {
 function setupEventListeners() {
     const form = document.getElementById('search-form');
     const input = document.getElementById('search-input');
-
-    if (form) {
-        form.onsubmit = (e) => e.preventDefault();
-        form.addEventListener('submit', (e) => { e.preventDefault(); handleSearch(); });
-    }
-    if (input) {
-        input.addEventListener('input', () => clearInputError('search-input'));
-        input.focus();
-    }
-
+    if (form) { form.onsubmit = (e) => e.preventDefault(); form.addEventListener('submit', (e) => { e.preventDefault(); handleSearch(); }); }
+    if (input) { input.addEventListener('input', () => clearInputError('search-input')); input.focus(); }
     setupSidebarToggle();
-
     let resizeTimer;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-            for (const chart of Object.values(state.charts)) {
-                if (chart?.resize) chart.resize();
-            }
-        }, 200);
-    });
-
-    window.addEventListener('hashchange', () => {
-        const id = getIdFromHash();
-        if (id && id !== state.currentViewId) {
-            document.getElementById('search-input').value = id;
-            handleSearch();
-        }
-    });
+    window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { for (const chart of Object.values(state.charts)) { if (chart?.resize) chart.resize(); } }, 200); });
+    window.addEventListener('hashchange', () => { const id = getIdFromHash(); if (id && id !== state.currentViewId) { document.getElementById('search-input').value = id; handleSearch(); } });
 }
-
 function setupSidebarToggle() {
-    const toggle = document.getElementById('sidebar-toggle');
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    const toggle = document.getElementById('sidebar-toggle'), sidebar = document.getElementById('sidebar'), overlay = document.getElementById('sidebar-overlay');
     if (!toggle || !sidebar || !overlay) return;
-
     function close() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
     toggle.addEventListener('click', () => { sidebar.classList.contains('open') ? close() : (sidebar.classList.add('open'), overlay.classList.add('open')); });
     overlay.addEventListener('click', close);
@@ -239,225 +169,206 @@ function setupSidebarToggle() {
 
 // --- Search ---
 async function handleSearch() {
-    const input = document.getElementById('search-input');
-    if (!input) return;
-    const rawValue = input.value.trim();
-    clearInputError('search-input');
-
+    const input = document.getElementById('search-input'); if (!input) return;
+    const rawValue = input.value.trim(); clearInputError('search-input');
     if (!rawValue) { showInputError('search-input', '请输入 Steam32 ID'); return; }
     if (!VALIDATION.PATTERN.test(rawValue)) { showInputError('search-input', 'Steam ID 只能包含数字'); return; }
-
     let accountId = rawValue;
-    if (rawValue.length >= 16 && rawValue.startsWith('7656119')) {
-        try { accountId = String(BigInt(rawValue) - STEAM_ID_OFFSET); }
-        catch { showInputError('search-input', '无效的 Steam ID'); return; }
-    }
+    if (rawValue.length >= 16 && rawValue.startsWith('7656119')) { try { accountId = String(BigInt(rawValue) - STEAM_ID_OFFSET); } catch { showInputError('search-input', '无效的 Steam ID'); return; } }
     if (state.isLoading) return;
-
-    const isEnemy = state.playerList.enemyIds.some(e => e.id === String(accountId));
-    state.isEnemy = isEnemy;
-    await loadDashboard(accountId, isEnemy);
+    state.isEnemy = state.playerList.enemyIds.some(e => e.id === String(accountId));
+    await loadDashboard(accountId, state.isEnemy);
 }
 
-// --- Dashboard Loading ---
+// --- Dashboard ---
 async function loadDashboard(accountId, isEnemy) {
     cancelAll();
-    state.currentViewId = accountId;
-    state.isEnemy = isEnemy;
-    state.isLoading = true;
-    state.turboMatches = [];
-    state.allRecentMatches = [];
-    state.sleepEval = null;
+    state.currentViewId = accountId; state.isEnemy = isEnemy; state.isLoading = true;
+    state.turboMatches = []; state.allRecentMatches = []; state.sleepEval = null;
+    state.turboCounts = null; state.turboStats = null; state.selectedPatch = null; state.availablePatches = [];
 
-    for (const [key, chart] of Object.entries(state.charts)) {
-        destroyChart(chart);
-        delete state.charts[key];
-    }
-
-    clearDashboard();
-    setEnemyHighlight(isEnemy);
-
-    const dashboard = document.getElementById('dashboard');
-    if (dashboard) dashboard.classList.add('loaded');
-
-    showLoading('summary-section', `正在加载 ${accountId} 的数据...`);
-    showLoading('profile-section', '');
-    showLoading('sleep-section', '');
-    showLoading('matches-section', '');
-
+    for (const [key, chart] of Object.entries(state.charts)) { destroyChart(chart); delete state.charts[key]; }
+    clearDashboard(); setEnemyHighlight(isEnemy);
+    const dashboard = document.getElementById('dashboard'); if (dashboard) dashboard.classList.add('loaded');
+    showLoading('summary-section', `正在加载 ${accountId} 的加速模式数据...`);
+    showLoading('profile-section', ''); showLoading('sleep-section', ''); showLoading('matches-section', '');
     window.location.hash = `#player-${accountId}`;
-    updateRateLimitDisplay();
-    renderPlayerList('player-list', state.playerList, getListCallbacks());
+    updateRateLimitDisplay(); renderPlayerList('player-list', state.playerList, getListCallbacks());
 
     try {
-        console.log(`[睡了么] Loading data for ${accountId} (enemy=${isEnemy})`);
+        console.log(`[睡了么] Loading for ${accountId} (enemy=${isEnemy})`);
 
-        // Step 1: Fetch profile + recent matches
-        let profile, recentMatches;
+        // Fetch profile + turbo counts/stats + recent matches
+        let profile, turboCounts, turboStats, recentMatches;
         try {
-            [profile, recentMatches] = await Promise.all([
+            [profile, turboCounts, turboStats, recentMatches] = await Promise.all([
                 getPlayer(accountId),
+                getTurboCounts(accountId),
+                fetchTurboStats(accountId),
                 getRecentMatches(accountId),
             ]);
         } catch (err) {
-            if (err instanceof PlayerNotFoundError) {
-                showPlayerNotFound('dashboard');
-                return;
-            }
+            if (err instanceof PlayerNotFoundError) { showPlayerNotFound('dashboard'); return; }
             throw err;
         }
-        state.profile = profile;
+        state.profile = profile; state.turboCounts = turboCounts; state.turboStats = turboStats;
         state.allRecentMatches = recentMatches || [];
         updateRateLimitDisplay();
 
-        // Step 2: Filter to Turbo matches only
+        // Extract patches
+        state.availablePatches = extractPatches(turboCounts);
+        console.log(`[睡了么] Turbo patches: ${state.availablePatches.length}`);
+
+        // Filter turbo matches from recent
         const turboMatches = (recentMatches || [])
             .filter(m => TURBO_MODES.includes(m.game_mode))
             .sort((a, b) => b.start_time - a.start_time);
         state.turboMatches = turboMatches;
-        console.log(`[睡了么] Turbo matches: ${turboMatches.length}/${recentMatches.length}`);
 
-        if (turboMatches.length === 0) {
-            showDashboardError('dashboard', '该玩家近期没有加速模式比赛记录', () => loadDashboard(accountId, isEnemy));
+        if (turboMatches.length === 0 && (!turboCounts?.game_mode?.['23']?.games)) {
+            showDashboardError('dashboard', '该玩家没有加速模式比赛记录');
             return;
         }
 
-        // Step 3: Compute all stats from matches
-        const computedStats = computeStatsFromMatches(turboMatches);
-
-        // Step 4: Sleep evaluation
+        // Compute summary from counts + totals
+        const computedStats = computeSummaryFromData(turboCounts, turboStats, turboMatches);
         state.sleepEval = evaluateSleep(state.allRecentMatches, state.heroMap);
 
-        // Step 5: Render dashboard
+        // Render
+        if (state.availablePatches.length > 0) {
+            renderPatchSelector('patch-selector-section', state.availablePatches, state.selectedPatch,
+                (patch) => onPatchChange(accountId, isEnemy, patch));
+        }
         renderFullDashboard(profile, computedStats, state.heroMap, turboMatches);
 
-        // Sleep card
         const sessionAdvice = getCurrentSessionAdvice(state.allRecentMatches, state.heroMap);
-        if (sessionAdvice) {
-            renderSessionAdvice('session-advice-section', sessionAdvice, isEnemy);
-        }
+        if (sessionAdvice) renderSessionAdvice('session-advice-section', sessionAdvice, isEnemy);
         if (state.sleepEval) {
-            const sleepMsg = getSleepMessage(state.sleepEval, isEnemy, state.heroMap);
-            renderSleepCard('sleep-section', state.sleepEval, sleepMsg, isEnemy);
+            renderSleepCard('sleep-section', state.sleepEval, getSleepMessage(state.sleepEval, isEnemy, state.heroMap), isEnemy);
         }
-
-        // Charts
-        renderChartCanvases();
-        createCharts(computedStats, turboMatches);
-
+        renderChartCanvases(); createCharts(computedStats, turboMatches);
         updateRateLimitDisplay();
-        console.log(`[睡了么] Dashboard loaded. Sleep score: ${state.sleepEval?.score}`);
+        console.log(`[睡了么] Done. Sleep score: ${state.sleepEval?.score}`);
 
     } catch (err) {
-        console.error('[睡了么] Load failed:', err);
-        if (err instanceof NetworkError) {
-            showNetworkError('dashboard', err.message, () => loadDashboard(accountId, isEnemy));
-        } else if (err instanceof RateLimitError) {
-            showDashboardError('dashboard', 'API 请求配额已用尽，请稍后重试', () => loadDashboard(accountId, isEnemy));
-        } else {
-            showDashboardError('dashboard', `加载失败: ${err.message}`, () => loadDashboard(accountId, isEnemy));
-        }
+        console.error('[睡了么] Error:', err);
+        if (err instanceof NetworkError) showNetworkError('dashboard', err.message, () => loadDashboard(accountId, isEnemy));
+        else if (err instanceof RateLimitError) showDashboardError('dashboard', 'API 请求配额已用尽，请稍后重试', () => loadDashboard(accountId, isEnemy));
+        else showDashboardError('dashboard', `加载失败: ${err.message}`, () => loadDashboard(accountId, isEnemy));
         updateRateLimitDisplay();
-    } finally {
-        state.isLoading = false;
-    }
+    } finally { state.isLoading = false; }
 }
 
-// --- Stats Computation (from matches only) ---
-function computeStatsFromMatches(matches) {
-    let sumK = 0, sumD = 0, sumA = 0, sumGpm = 0, sumXpm = 0;
-    let wins = 0, losses = 0;
+// --- Patch Filter ---
+function extractPatches(counts) {
+    if (!counts?.patch) return [];
+    return Object.keys(counts.patch).filter(k => k !== 'NaN').map(Number).sort((a, b) => b - a);
+}
 
-    const heroMap = new Map();
+async function onPatchChange(accountId, isEnemy, patch) {
+    state.selectedPatch = patch;
+    try {
+        const turboStats = await fetchTurboStats(accountId, patch);
+        state.turboStats = turboStats;
+        const computedStats = computeSummaryFromData(state.turboCounts, turboStats, state.turboMatches);
+        state.turboStats = turboStats;
+        renderTurboSummary('summary-section', computedStats);
+        renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null);
+        renderChartCanvases(); createCharts(computedStats, state.turboMatches);
+    } catch (err) { console.warn('[睡了么] Patch re-fetch failed:', err); }
+}
 
-    for (const m of matches) {
-        // Win/Loss
-        const isWin = (m.player_slot < 128) === m.radiant_win;
-        if (isWin) wins++; else losses++;
+// --- Computation ---
+function computeSummaryFromData(counts, turboStats, matches) {
+    const { wl, heroes, totals } = turboStats;
+    const wins = wl.win || 0, losses = wl.lose || 0, totalGames = wins + losses;
 
-        // Summary averages
-        sumK += m.kills || 0;
-        sumD += m.deaths || 0;
-        sumA += m.assists || 0;
-        sumGpm += m.gold_per_min || 0;
-        sumXpm += m.xp_per_min || 0;
+    function avg(field) { const d = totals[field]; return (d && d.n > 0) ? d.sum / d.n : 0; }
 
-        // Per-hero stats
-        const hid = m.hero_id;
-        if (!heroMap.has(hid)) {
-            heroMap.set(hid, { hero_id: hid, games: 0, win: 0, kills: 0, deaths: 0, assists: 0, gold_per_min: 0, xp_per_min: 0, hero_damage: 0, tower_damage: 0, last_hits: 0 });
-        }
-        const h = heroMap.get(hid);
-        h.games++;
-        if (isWin) h.win++;
-        h.kills += m.kills || 0;
-        h.deaths += m.deaths || 0;
-        h.assists += m.assists || 0;
-        h.gold_per_min += m.gold_per_min || 0;
-        h.xp_per_min += m.xp_per_min || 0;
-        h.hero_damage += m.hero_damage || 0;
-        h.tower_damage += m.tower_damage || 0;
-        h.last_hits += m.last_hits || 0;
+    // Fallback: compute from recent matches if totals missing
+    let avgKills = avg('kills'), avgDeaths = avg('deaths'), avgAssists = avg('assists');
+    let avgGpm = avg('gold_per_min'), avgXpm = avg('xp_per_min');
+    if (avgGpm === 0 && matches.length > 0) {
+        let sK = 0, sD = 0, sA = 0, sG = 0, sX = 0;
+        for (const m of matches) { sK += m.kills||0; sD += m.deaths||0; sA += m.assists||0; sG += m.gold_per_min||0; sX += m.xp_per_min||0; }
+        avgKills = sK / matches.length; avgDeaths = sD / matches.length; avgAssists = sA / matches.length;
+        avgGpm = sG / matches.length; avgXpm = sX / matches.length;
     }
 
-    const total = matches.length;
-    const heroes = Array.from(heroMap.values()).sort((a, b) => b.games - a.games);
+    // Extra dimensions from counts
+    const isRadiant = counts?.is_radiant || {};
+    const radiantData = isRadiant[1] || isRadiant['1'] || {};
+    const direData = isRadiant[0] || isRadiant['0'] || {};
+    const radiantWR = radiantData.games > 0 ? (radiantData.win / radiantData.games * 100) : 0;
+    const direWR = direData.games > 0 ? (direData.win / direData.games * 100) : 0;
+    const laneRole = counts?.lane_role || {};
+    const coreGames = (laneRole[0] || laneRole['0'] || {}).games || 0;
+    const supportGames = (laneRole[1] || laneRole['1'] || {}).games || 0;
 
     return {
-        totalGames: total,
-        wins,
-        losses,
-        winRate: total > 0 ? (wins / total * 100) : 0,
-        avgKills: total > 0 ? sumK / total : 0,
-        avgDeaths: total > 0 ? sumD / total : 0,
-        avgAssists: total > 0 ? sumA / total : 0,
-        avgGpm: total > 0 ? sumGpm / total : 0,
-        avgXpm: total > 0 ? sumXpm / total : 0,
+        totalGames, wins, losses,
+        winRate: totalGames > 0 ? (wins / totalGames * 100) : 0,
+        avgKills, avgDeaths, avgAssists, avgGpm, avgXpm,
         maxStreak: calculateMaxWinStreak(matches),
-        heroes,
+        radiantWR, direWR, coreGames, supportGames,
+        heroes: computeHeroesFromData(heroes, matches),
     };
+}
+
+function computeHeroesFromData(apiHeroes, matches) {
+    const matchHeroes = deriveHeroStatsFromMatches(matches);
+    if (matchHeroes.length > 0) {
+        const mMap = new Map(matchHeroes.map(h => [h.hero_id, h]));
+        // Use match-derived stats for KDA/GPM/XPM, API for game counts
+        for (const hero of apiHeroes || []) {
+            const mh = mMap.get(hero.hero_id);
+            if (mh) {
+                hero._match_games = mh.games;
+                hero.kills = mh.kills; hero.deaths = mh.deaths; hero.assists = mh.assists;
+                hero.gold_per_min = mh.gold_per_min; hero.xp_per_min = mh.xp_per_min;
+                hero.hero_damage = mh.hero_damage; hero.tower_damage = mh.tower_damage; hero.last_hits = mh.last_hits;
+            }
+        }
+        for (const mh of matchHeroes) { if (!apiHeroes?.find(h => h.hero_id === mh.hero_id)) apiHeroes?.push(mh); }
+    }
+    if (!apiHeroes?.length) return matchHeroes;
+    return (apiHeroes || []).sort((a, b) => (b.games || 0) - (a.games || 0));
+}
+
+function deriveHeroStatsFromMatches(matches) {
+    const map = new Map();
+    for (const m of matches) {
+        const hid = m.hero_id;
+        if (!map.has(hid)) map.set(hid, { hero_id: hid, games: 0, win: 0, kills: 0, deaths: 0, assists: 0, gold_per_min: 0, xp_per_min: 0, hero_damage: 0, tower_damage: 0, last_hits: 0 });
+        const h = map.get(hid); h.games++;
+        if ((m.player_slot < 128) === m.radiant_win) h.win++;
+        h.kills += m.kills||0; h.deaths += m.deaths||0; h.assists += m.assists||0;
+        h.gold_per_min += m.gold_per_min||0; h.xp_per_min += m.xp_per_min||0;
+        h.hero_damage += m.hero_damage||0; h.tower_damage += m.tower_damage||0; h.last_hits += m.last_hits||0;
+    }
+    return Array.from(map.values()).sort((a, b) => b.games - a.games);
 }
 
 function calculateMaxWinStreak(matches) {
     if (!matches?.length) return 0;
     const sorted = [...matches].sort((a, b) => a.start_time - b.start_time);
     let max = 0, cur = 0;
-    for (const m of sorted) {
-        if ((m.player_slot < 128) === m.radiant_win) { cur++; max = Math.max(max, cur); }
-        else { cur = 0; }
-    }
+    for (const m of sorted) { if ((m.player_slot < 128) === m.radiant_win) { cur++; max = Math.max(max, cur); } else cur = 0; }
     return max;
 }
 
 // --- Charts ---
 function createCharts(stats, matches) {
-    const trendCanvas = document.getElementById('winrate-trend-chart');
-    if (trendCanvas && matches.length > 0) {
-        const chart = createWinRateTrend(trendCanvas, matches);
-        if (chart) state.charts.winRateTrend = chart;
-    }
-    const heroCanvas = document.getElementById('hero-perf-chart');
-    if (heroCanvas && stats.heroes.length > 0) {
-        const chart = createHeroPerformanceChart(heroCanvas, stats.heroes, state.heroMap);
-        if (chart) state.charts.heroPerformance = chart;
-    }
+    const tc = document.getElementById('winrate-trend-chart');
+    if (tc && matches.length > 0) { const c = createWinRateTrend(tc, matches); if (c) state.charts.winRateTrend = c; }
+    const hc = document.getElementById('hero-perf-chart');
+    if (hc && stats.heroes?.length > 0) { const c = createHeroPerformanceChart(hc, stats.heroes, state.heroMap); if (c) state.charts.heroPerformance = c; }
 }
 
 // --- URL Hash ---
-function checkUrlHash() {
-    const id = getIdFromHash();
-    if (id && id !== state.currentViewId && !state.isLoading) {
-        document.getElementById('search-input').value = id;
-        setTimeout(() => handleSearch(), 500);
-    }
-}
-function getIdFromHash() {
-    const match = window.location.hash.match(/^#player-(\d+)$/);
-    return match ? match[1] : null;
-}
+function checkUrlHash() { const id = getIdFromHash(); if (id && id !== state.currentViewId && !state.isLoading) { document.getElementById('search-input').value = id; setTimeout(() => handleSearch(), 500); } }
+function getIdFromHash() { const m = window.location.hash.match(/^#player-(\d+)$/); return m ? m[1] : null; }
 
 // --- Rate Limit ---
-function updateRateLimitDisplay() {
-    renderRateLimitIndicator('rate-limit-indicator', getRateLimitStatus());
-}
+function updateRateLimitDisplay() { renderRateLimitIndicator('rate-limit-indicator', getRateLimitStatus()); }
 setInterval(updateRateLimitDisplay, 10000);

@@ -214,6 +214,78 @@ export async function getRecentMatches(accountId) {
     return request(`/players/${accountId}/recentMatches`, {}, {});
 }
 
+/** Base params for Turbo-only data */
+const TURBO_PARAMS = { game_mode: 23, significant: 0 };
+
+/**
+ * Get Turbo mode counts (accurate with significant=0).
+ */
+export async function getTurboCounts(accountId) {
+    return request(`/players/${accountId}/counts`, TURBO_PARAMS, {
+        cacheKey: STORAGE_KEYS.COUNTS_PREFIX + accountId + '_turbo',
+        cacheTtl: CACHE_TTL.STATS,
+    });
+}
+
+/**
+ * Get Turbo win/loss stats.
+ */
+export async function getTurboWinLoss(accountId, patch) {
+    const params = { ...TURBO_PARAMS };
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
+    return request(`/players/${accountId}/wl`, params, {
+        cacheKey: STORAGE_KEYS.STATS_PREFIX + accountId + '_turbo_wl' + suffix,
+        cacheTtl: CACHE_TTL.STATS,
+    });
+}
+
+/**
+ * Get Turbo hero stats.
+ */
+export async function getTurboHeroStats(accountId, patch) {
+    const params = { ...TURBO_PARAMS };
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
+    return request(`/players/${accountId}/heroes`, params, {
+        cacheKey: STORAGE_KEYS.STATS_PREFIX + accountId + '_turbo_heroes' + suffix,
+        cacheTtl: CACHE_TTL.STATS,
+    });
+}
+
+/**
+ * Get Turbo aggregated totals. Returns { field: {n, sum} }.
+ */
+export async function getTurboTotals(accountId, patch) {
+    const params = { ...TURBO_PARAMS };
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
+    const raw = await request(`/players/${accountId}/totals`, params, {
+        cacheKey: STORAGE_KEYS.STATS_PREFIX + accountId + '_turbo_totals' + suffix,
+        cacheTtl: CACHE_TTL.STATS,
+    });
+    return convertTotalsArray(raw);
+}
+
+function convertTotalsArray(raw) {
+    if (!Array.isArray(raw)) return raw;
+    const obj = {};
+    for (const item of raw) obj[item.field] = { n: item.n || 0, sum: item.sum || 0 };
+    return obj;
+}
+
+/**
+ * Fetch all Turbo stats in parallel (wl + heroes + totals).
+ */
+export async function fetchTurboStats(accountId, patch) {
+    const [wl, heroes, totals] = await Promise.all([
+        getTurboWinLoss(accountId, patch),
+        getTurboHeroStats(accountId, patch),
+        getTurboTotals(accountId, patch),
+    ]);
+    return { wl, heroes, totals };
+}
+
 /**
  * Fetch recent matches and filter to Turbo modes on the client.
  */

@@ -2,7 +2,7 @@
 // ui.js — DOM Rendering Functions
 // ============================================================
 
-import { RANK_MEDALS, LOBBY_NAMES, REGION_NAMES, RATE_LIMIT } from './config.js';
+import { RANK_MEDALS, LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
 
 // --- Tiny DOM Builder ---
 
@@ -161,6 +161,10 @@ export function renderTurboSummary(containerId, stats) {
         avgGpm = 0,
         avgXpm = 0,
         maxStreak = 0,
+        radiantWR = 0,
+        direWR = 0,
+        coreGames = 0,
+        supportGames = 0,
     } = stats;
 
     const kda = avgDeaths > 0
@@ -168,13 +172,15 @@ export function renderTurboSummary(containerId, stats) {
         : (avgKills + avgAssists).toFixed(1);
 
     const cards = [
-        { icon: '🎮', label: '最近加速模式场次', value: totalGames.toLocaleString(), color: '' },
-        { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%',
-          color: winRate >= 50 ? 'win' : 'loss' },
+        { icon: '🎮', label: '加速模式场次', value: totalGames.toLocaleString(), color: '' },
+        { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
         { icon: '💰', label: '平均 GPM', value: Math.round(avgGpm).toLocaleString(), color: '' },
         { icon: '⚡', label: '平均 XPM', value: Math.round(avgXpm).toLocaleString(), color: '' },
         { icon: '🔥', label: '最长连胜', value: maxStreak + ' 场', color: '' },
+        { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
+        { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
+        { icon: '🎯', label: '核心/辅助比', value: supportGames > 0 ? (coreGames / supportGames).toFixed(0) + ':1' : '纯核心', color: '' },
     ];
 
     container.innerHTML = `
@@ -215,9 +221,6 @@ export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
         { key: 'hero', label: '英雄', sortable: false },
         { key: 'games', label: '场次', sortable: true },
         { key: 'winrate', label: '胜率', sortable: true },
-        { key: 'kda', label: 'KDA', sortable: true },
-        { key: 'gpm', label: 'GPM', sortable: true },
-        { key: 'xpm', label: 'XPM', sortable: true },
     ];
 
     const sortIndicator = (key) => {
@@ -288,13 +291,6 @@ function renderHeroRow(hero, heroMap) {
     const games = hero.games || 0;
     const wins = hero.win || 0;
     const wr = games > 0 ? ((wins / games) * 100).toFixed(1) : '0.0';
-    const k = (hero.kills || 0) / Math.max(1, games);
-    const d = (hero.deaths || 0) / Math.max(1, games);
-    const a = (hero.assists || 0) / Math.max(1, games);
-    const kda = d > 0 ? ((k + a) / d).toFixed(1) : (k + a).toFixed(1);
-    const gpm = games > 0 ? Math.round((hero.gold_per_min || 0) / games) : 0;
-    const xpm = games > 0 ? Math.round((hero.xp_per_min || 0) / games) : 0;
-
     const wrClass = parseFloat(wr) >= 55 ? 'wr-good' : parseFloat(wr) >= 45 ? 'wr-avg' : 'wr-bad';
 
     return `
@@ -307,9 +303,6 @@ function renderHeroRow(hero, heroMap) {
             </td>
             <td class="col-games">${games}</td>
             <td class="col-winrate ${wrClass}">${wr}%</td>
-            <td class="col-kda">${kda}</td>
-            <td class="col-gpm">${gpm}</td>
-            <td class="col-xpm">${xpm}</td>
         </tr>
     `;
 }
@@ -319,14 +312,6 @@ function getHeroField(hero, field) {
     switch (field) {
         case 'games': return hero.games || 0;
         case 'winrate': return games > 0 ? (hero.win || 0) / games : 0;
-        case 'kda': {
-            const k = (hero.kills || 0) / games;
-            const d = (hero.deaths || 0) / games;
-            const a = (hero.assists || 0) / games;
-            return d > 0 ? (k + a) / d : (k + a);
-        }
-        case 'gpm': return games > 0 ? (hero.gold_per_min || 0) / games : 0;
-        case 'xpm': return games > 0 ? (hero.xp_per_min || 0) / games : 0;
         default: return 0;
     }
 }
@@ -606,6 +591,10 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
         avgGpm: turboStats.avgGpm,
         avgXpm: turboStats.avgXpm,
         maxStreak: turboStats.maxStreak,
+        radiantWR: turboStats.radiantWR || 0,
+        direWR: turboStats.direWR || 0,
+        coreGames: turboStats.coreGames || 0,
+        supportGames: turboStats.supportGames || 0,
     });
 
     // Hero table
@@ -621,7 +610,7 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
 
 export function clearDashboard() {
     showDashboard(false);
-    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'hero-table-section', 'matches-section'].forEach(id => {
+    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'patch-selector-section', 'hero-table-section', 'matches-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
     });
@@ -965,3 +954,31 @@ export function renderSessionAdvice(containerId, advice, isEnemy) {
     `;
 }
 
+
+// ============================================================
+// Patch Version Filter
+// ============================================================
+
+export function renderPatchSelector(containerId, patches, selected, onChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="patch-selector">
+            <span class="patch-label">📦 版本筛选</span>
+            <select class="patch-select" id="patch-select">
+                <option value="">全部版本</option>
+                ${patches.map(p => {
+                    const ver = PATCH_VERSIONS[p];
+                    const label = ver ? `${ver} (Patch ${p})` : `Patch ${p}`;
+                    return '<option value="' + p + '" ' + (selected === p ? 'selected' : '') + '>' + label + '</option>';
+                }).join('')}
+            </select>
+        </div>
+    `;
+
+    document.getElementById('patch-select')?.addEventListener('change', (e) => {
+        const val = e.target.value;
+        onChange(val ? parseInt(val) : null);
+    });
+}
