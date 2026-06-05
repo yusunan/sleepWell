@@ -723,7 +723,7 @@ a:hover {
     }
 
     .app-layout {
-        grid-template-columns: 1fr;
+        display: block;
     }
 
     .sidebar {
@@ -732,16 +732,21 @@ a:hover {
         left: 0;
         width: 260px;
         height: 100vh;
+        height: 100dvh;
         z-index: 200;
         transform: translateX(-100%);
         transition: transform 0.25s ease;
         border-right: 1px solid var(--border-color);
-        border-bottom: none;
         box-shadow: 2px 0 12px rgba(0,0,0,0.3);
+        overflow-y: auto;
     }
 
     .sidebar.open {
         transform: translateX(0);
+    }
+
+    .main-content {
+        width: 100%;
     }
 
     /* Overlay behind sidebar */
@@ -1078,29 +1083,31 @@ a:hover {
 }
 
 /* ============================================================
-   App Layout — Sidebar + Main
+   App Layout — Sidebar + Main (desktop only)
    ============================================================ */
 
-.app-layout {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    max-width: var(--max-width);
-    margin: 0 auto;
-    min-height: calc(100vh - 180px);
-}
+@media (min-width: 1025px) {
+    .app-layout {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        max-width: var(--max-width);
+        margin: 0 auto;
+        min-height: calc(100vh - 180px);
+    }
 
-.sidebar {
-    background: var(--bg-secondary);
-    border-right: 1px solid var(--border-color);
-    padding: 20px 16px;
-    position: sticky;
-    top: 48px;
-    height: calc(100vh - 48px);
-    overflow-y: auto;
-}
+    .sidebar {
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border-color);
+        padding: 20px 16px;
+        position: sticky;
+        top: 48px;
+        height: calc(100vh - 48px);
+        overflow-y: auto;
+    }
 
-.main-content {
-    min-width: 0;
+    .main-content {
+        min-width: 0;
+    }
 }
 
 /* ============================================================
