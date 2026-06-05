@@ -2,7 +2,7 @@
 // ui.js — DOM Rendering Functions
 // ============================================================
 
-import { RANK_MEDALS, LOBBY_NAMES, REGION_NAMES, RATE_LIMIT } from './config.js';
+import { RANK_MEDALS, LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
 
 // --- Tiny DOM Builder ---
 
@@ -621,7 +621,7 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
 
 export function clearDashboard() {
     showDashboard(false);
-    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'hero-table-section', 'matches-section'].forEach(id => {
+    ['profile-section', 'session-advice-section', 'sleep-section', 'summary-section', 'patch-selector-section', 'hero-table-section', 'matches-section'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = '';
     });
@@ -963,4 +963,32 @@ export function renderSessionAdvice(containerId, advice, isEnemy) {
             </div>
         </div>
     `;
+}
+
+// ============================================================
+// Patch Version Filter
+// ============================================================
+
+export function renderPatchSelector(containerId, patches, selected, onChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="patch-selector">
+            <span class="patch-label">📦 版本筛选</span>
+            <select class="patch-select" id="patch-select">
+                <option value="">全部版本</option>
+                ${patches.map(p => {
+                    const ver = PATCH_VERSIONS[p];
+                    const label = ver ? `${ver} (Patch ${p})` : `Patch ${p}`;
+                    return `<option value="${p}" ${selected === p ? 'selected' : ''}>${label}</option>`;
+                }).join('')}
+            </select>
+        </div>
+    `;
+
+    document.getElementById('patch-select')?.addEventListener('change', (e) => {
+        const val = e.target.value;
+        onChange(val ? parseInt(val) : null);
+    });
 }

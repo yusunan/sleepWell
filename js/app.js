@@ -41,6 +41,7 @@ import {
     renderPlayerList,
     renderSleepCard,
     renderSessionAdvice,
+    renderPatchSelector,
     setEnemyHighlight,
 } from './ui.js';
 import {
@@ -63,6 +64,8 @@ const state = {
     sleepEval: null,         // Sleep evaluation result
     charts: {},
     playerList: { myId: null, enemyIds: [] },
+    selectedPatch: null,     // null = all patches
+    availablePatches: [],    // Sorted patch numbers from counts
 };
 
 // --- Init ---
@@ -379,9 +382,11 @@ async function loadDashboard(accountId, isEnemy) {
         state.counts = counts;
         updateRateLimitDisplay();
 
-        // Step 2: Turbo modes
+        // Step 2: Extract available patches & turbo modes
+        state.availablePatches = extractPatches(counts);
+        state.selectedPatch = null;
         const turboModes = detectTurboModes(counts);
-        console.log(`[睡了么] Turbo modes: [${turboModes.join(', ')}]`);
+        console.log(`[睡了么] Turbo modes: [${turboModes.join(', ')}], patches: ${state.availablePatches.length}`);
 
         if (turboModes.length === 0) {
             showNoTurboData('dashboard', counts);
@@ -391,7 +396,7 @@ async function loadDashboard(accountId, isEnemy) {
 
         // Step 3: Turbo stats + recent matches
         const [turboStats, recentMatches] = await Promise.all([
-            fetchTurboStats(accountId, turboModes),
+            fetchTurboStats(accountId, turboModes, state.selectedPatch),
             getRecentMatches(accountId),
         ]);
 
@@ -420,6 +425,12 @@ async function loadDashboard(accountId, isEnemy) {
 
         // Step 6: Sleep evaluation (uses all recent matches, not just turbo)
         state.sleepEval = evaluateSleep(state.allRecentMatches, state.heroMap);
+
+        // Patch selector (before summary cards)
+        if (state.availablePatches.length > 0) {
+            renderPatchSelector('patch-selector-section', state.availablePatches, state.selectedPatch,
+                (patch) => onPatchChange(patch));
+        }
 
         // Step 7: Render
         renderFullDashboard(profile, computedStats, state.heroMap, turboMatches);
@@ -515,6 +526,59 @@ function calculateMaxWinStreak(matches) {
         else { cur = 0; }
     }
     return max;
+}
+
+/** Extract sorted patch numbers from counts data (newest first) */
+function extractPatches(counts) {
+    if (!counts?.patch) return [];
+    return Object.keys(counts.patch)
+        .filter(k => k !== 'NaN')
+        .map(Number)
+        .sort((a, b) => b - a);
+}
+
+/** Re-fetch stats with selected patch filter */
+async function onPatchChange(patch) {
+    state.selectedPatch = patch;
+    if (!state.currentViewId) return;
+
+    // Clear cached stats for this view
+    state.turboStats = null;
+    for (const [key] of Object.entries(state.charts)) {
+        destroyChart(state.charts[key]);
+        delete state.charts[key];
+    }
+
+    // Re-fetch turbo stats with patch filter
+    const turboModes = detectTurboModes(state.counts);
+    if (turboModes.length === 0) return;
+
+    try {
+        const turboStats = await fetchTurboStats(state.currentViewId, turboModes, patch);
+        const computedStats = computeTurboStats(turboStats, state.turboMatches);
+        const derivedHeroes = deriveHeroStatsFromMatches(state.turboMatches);
+        if (derivedHeroes.length > 0) computedStats.heroes = derivedHeroes;
+        state.turboStats = computedStats;
+
+        // Re-render summary + hero table
+        renderTurboSummary('summary-section', {
+            totalGames: computedStats.totalGames,
+            wins: computedStats.wins,
+            losses: computedStats.losses,
+            winRate: computedStats.winRate,
+            avgKills: computedStats.avgKills,
+            avgDeaths: computedStats.avgDeaths,
+            avgAssists: computedStats.avgAssists,
+            avgGpm: computedStats.avgGpm,
+            avgXpm: computedStats.avgXpm,
+            maxStreak: computedStats.maxStreak,
+        });
+        renderHeroTable('hero-table-section', computedStats.heroes, state.heroMap, null);
+        renderChartCanvases();
+        createCharts(computedStats, state.turboMatches);
+    } catch (err) {
+        console.warn('[睡了么] Patch re-fetch failed:', err);
+    }
 }
 
 function deriveHeroStatsFromMatches(matches) {

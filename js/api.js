@@ -219,13 +219,13 @@ export async function getCounts(accountId) {
 /**
  * Get win/loss stats, optionally filtered by game_mode.
  */
-export async function getWinLoss(accountId, gameMode) {
+export async function getWinLoss(accountId, gameMode, patch) {
     const params = {};
-    if (gameMode !== undefined && gameMode !== null) {
-        params.game_mode = gameMode;
-    }
+    if (gameMode !== undefined && gameMode !== null) params.game_mode = gameMode;
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
     const cacheKey = gameMode != null
-        ? STORAGE_KEYS.STATS_PREFIX + accountId + '_wl_' + gameMode
+        ? STORAGE_KEYS.STATS_PREFIX + accountId + '_wl_' + gameMode + suffix
         : null;
     return request(`/players/${accountId}/wl`, params, {
         cacheKey,
@@ -236,13 +236,13 @@ export async function getWinLoss(accountId, gameMode) {
 /**
  * Get hero stats for a player, optionally filtered by game_mode.
  */
-export async function getHeroStats(accountId, gameMode) {
+export async function getHeroStats(accountId, gameMode, patch) {
     const params = {};
-    if (gameMode !== undefined && gameMode !== null) {
-        params.game_mode = gameMode;
-    }
+    if (gameMode !== undefined && gameMode !== null) params.game_mode = gameMode;
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
     const cacheKey = gameMode != null
-        ? STORAGE_KEYS.STATS_PREFIX + accountId + '_heroes_' + gameMode
+        ? STORAGE_KEYS.STATS_PREFIX + accountId + '_heroes_' + gameMode + suffix
         : null;
     return request(`/players/${accountId}/heroes`, params, {
         cacheKey,
@@ -255,13 +255,13 @@ export async function getHeroStats(accountId, gameMode) {
  * The API returns an array of { field, n, sum } objects.
  * We convert it to a flat object like { kills: { n, sum }, deaths: { n, sum } }.
  */
-export async function getTotals(accountId, gameMode) {
+export async function getTotals(accountId, gameMode, patch) {
     const params = {};
-    if (gameMode !== undefined && gameMode !== null) {
-        params.game_mode = gameMode;
-    }
+    if (gameMode !== undefined && gameMode !== null) params.game_mode = gameMode;
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
     const cacheKey = gameMode != null
-        ? STORAGE_KEYS.STATS_PREFIX + accountId + '_totals_' + gameMode
+        ? STORAGE_KEYS.STATS_PREFIX + accountId + '_totals_' + gameMode + suffix
         : null;
     const raw = await request(`/players/${accountId}/totals`, params, {
         cacheKey,
@@ -318,7 +318,7 @@ export function detectTurboModes(countsData) {
  * @param {number[]} turboModes - Array of game_mode IDs to fetch (e.g., [23] or [22, 23])
  * @returns {Promise<{wl: {win:number,lose:number}, heroes: Array, totals: Object}>}
  */
-export async function fetchTurboStats(accountId, turboModes) {
+export async function fetchTurboStats(accountId, turboModes, patch) {
     if (turboModes.length === 0) {
         return { wl: { win: 0, lose: 0 }, heroes: [], totals: {} };
     }
@@ -326,9 +326,9 @@ export async function fetchTurboStats(accountId, turboModes) {
     // Fetch all modes in parallel
     const results = await Promise.allSettled(
         turboModes.flatMap(mode => [
-            getWinLoss(accountId, mode).then(d => ({ type: 'wl', mode, data: d })),
-            getHeroStats(accountId, mode).then(d => ({ type: 'heroes', mode, data: d })),
-            getTotals(accountId, mode).then(d => ({ type: 'totals', mode, data: d })),
+            getWinLoss(accountId, mode, patch).then(d => ({ type: 'wl', mode, data: d })),
+            getHeroStats(accountId, mode, patch).then(d => ({ type: 'heroes', mode, data: d })),
+            getTotals(accountId, mode, patch).then(d => ({ type: 'totals', mode, data: d })),
         ])
     );
 
