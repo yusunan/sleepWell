@@ -103,17 +103,17 @@ export function evaluateSleep(matches, heroMap) {
     const kda = lastMatch.deaths > 0
         ? (lastMatch.kills + lastMatch.assists) / lastMatch.deaths
         : (lastMatch.kills + lastMatch.assists);
-    // High KDA → excited, harder to sleep (inverted U)
-    // Good KDA (2-5): best for sleep → 100
-    // Very low KDA (<1): tilted → 30
-    // Very high KDA (>10): too excited → 50
+    // KDA 越高越牛逼，不扣分
+    // KDA < 1: tilted → 30
+    // KDA 1-10: linear 50→100
+    // KDA >= 10: max → 100
     let kdaScore;
     if (kda < 1) {
         kdaScore = 30;
-    } else if (kda <= 5) {
-        kdaScore = 70 + (kda - 1) * 7.5; // 70 at KDA=1, 100 at KDA=5
+    } else if (kda >= 10) {
+        kdaScore = 100;
     } else {
-        kdaScore = Math.max(50, 100 - (kda - 5) * 10); // 100 at KDA=5, 50 at KDA=10+
+        kdaScore = 50 + (kda - 1) / 9 * 50; // 50 at KDA=1, 100 at KDA=10
     }
     kdaScore = Math.round(kdaScore);
 
@@ -155,14 +155,14 @@ const GENTLE_MESSAGES = {
         '还不错，但别让游戏偷走睡眠😴',
     ],
     poor: [
-        '你可以输给任何人，但唯独不能输给你自己',
-        '所有人都想看你跌倒的时候，那恰恰是你站稳的理由',
-        '就算全世界都否定你，你也不能否定你自己',
+        '你可以输给任何人，但唯独不能输给你自己✨',
+        '所有人都想看你跌倒的时候，那恰恰是你站稳的理由✨',
+        '就算全世界都否定你，你也不能否定你自己✨',
     ],
     terrible: [
-        '鏖战到天亮，好像你年轻那样',
-        '输了游戏你还有人生',
-        '他们都想看你输，可你偏要赢给他们看',
+        '鏖战到天亮，好像你年轻那样✨',
+        '输了游戏你还有人生✨',
+        '他们都想看你输，可你偏要赢给他们看✨',
     ],
 };
 
