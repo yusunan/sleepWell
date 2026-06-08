@@ -61,3 +61,7 @@ python3 -m http.server 8080
 ## 技术栈
 
 纯前端 · Chart.js v4 · OpenDota API · localStorage · ES Modules · 零构建工具
+
+## License
+
+[BSL 1.1](LICENSE) — 非商业使用免费，2030-06-08 起自动转为 MIT License。
