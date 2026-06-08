@@ -173,11 +173,11 @@ export function renderTurboSummary(containerId, stats) {
     const cards = [
         { icon: '🎮', label: '加速模式场次', value: totalGames.toLocaleString(), color: '' },
         { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'win' : 'loss' },
+        { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
+        { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
         { icon: '💰', label: '平均 GPM', value: Math.round(avgGpm).toLocaleString(), color: '' },
         { icon: '⚡', label: '平均 XPM', value: Math.round(avgXpm).toLocaleString(), color: '' },
-        { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
-        { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '🎯', label: '核心/辅助比', value: supportGames > 0 ? (coreGames / supportGames).toFixed(0) + ':1' : '纯核心', color: '' },
     ];
 

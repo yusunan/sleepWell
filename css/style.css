@@ -1815,14 +1815,16 @@ a:hover {
 }
 
 .col-peer-name {
-    min-width: 100px;
-    max-width: 160px;
+    min-width: 80px;
 }
 
 .peer-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 140px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 /* Tag column */
@@ -1896,9 +1898,14 @@ a:hover {
     }
 }
 
+@media (max-width: 640px) {
+    .peers-table .col-tag {
+        display: none;
+    }
+}
+
 @media (max-width: 480px) {
     .peers-table .col-games,
-    .peers-table .col-tag,
     .peers-table .col-time {
         display: none;
     }

@@ -234,7 +234,7 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
         setEnemyHighlight(isEnemy);
     }
     const dashboard = document.getElementById('dashboard'); if (dashboard) dashboard.classList.add('loaded');
-    showLoading('summary-section', `正在加载 ${accountId} 的加速模式数据...`);
+    showLoading('summary-section', `别只关心赢的多不多，重要是睡的好不好`);
     showLoading('profile-section', ''); showLoading('sleep-section', ''); showLoading('matches-section', '');
     window.location.hash = `#player-${accountId}`;
     updateRateLimitDisplay(); renderPlayerList('player-list', state.playerList, getListCallbacks());
