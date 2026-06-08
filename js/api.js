@@ -206,17 +206,14 @@ export async function getPlayer(accountId) {
     });
 }
 
-/**
- * Get recent matches.
- * Filter client-side for game_mode 22/23.
- */
-export async function getRecentMatches(accountId) {
-    return request(`/players/${accountId}/recentMatches`, {}, {});
-}
-
 /** Base params for Turbo-only data */
 const TURBO_PARAMS = { game_mode: 23, significant: 0 };
-
+/**
+ * Get recent matches (Turbo mode only).
+ */
+export async function getRecentMatches(accountId) {
+    return request(`/players/${accountId}/recentMatches`, TURBO_PARAMS, {});
+}
 /**
  * Get Turbo mode counts (accurate with significant=0).
  */
