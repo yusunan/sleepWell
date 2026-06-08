@@ -289,7 +289,7 @@ export function getSleepMessage(evalResult, isEnemy, heroMap, isTeammate = false
         else if (kda < 2) detail += isWin ? '躺了躺了！躺好了直接睡觉' : ' 摸摸头，今晚铁血复仇~';
     }
 
-    return pick(messages[quality]) + ' ' + detail;
+    return pick(messages[quality]) + '\n' + detail;
 }
 
 /**

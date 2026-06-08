@@ -160,7 +160,6 @@ export function renderTurboSummary(containerId, stats) {
         avgAssists = 0,
         avgGpm = 0,
         avgXpm = 0,
-        maxStreak = 0,
         radiantWR = 0,
         direWR = 0,
         coreGames = 0,
@@ -177,7 +176,6 @@ export function renderTurboSummary(containerId, stats) {
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
         { icon: '💰', label: '平均 GPM', value: Math.round(avgGpm).toLocaleString(), color: '' },
         { icon: '⚡', label: '平均 XPM', value: Math.round(avgXpm).toLocaleString(), color: '' },
-        { icon: '🔥', label: '最长连胜', value: maxStreak + ' 场', color: '' },
         { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
         { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '🎯', label: '核心/辅助比', value: supportGames > 0 ? (coreGames / supportGames).toFixed(0) + ':1' : '纯核心', color: '' },
@@ -327,6 +325,13 @@ export function renderRecentMatches(containerId, matches, heroMap) {
         return;
     }
 
+    // Count wins and losses
+    let wins = 0, losses = 0;
+    for (const m of matches) {
+        if ((m.player_slot < 128) === m.radiant_win) wins++;
+        else losses++;
+    }
+
     container.innerHTML = `
         <div class="matches-table-wrapper">
             <table class="data-table matches-table">
@@ -350,7 +355,12 @@ export function renderRecentMatches(containerId, matches, heroMap) {
                 </tbody>
             </table>
         </div>
-        <div class="match-count">共 ${matches.length} 场比赛</div>
+        <div class="match-count">
+            共 ${matches.length} 场比赛 —
+            <span class="match-wl win">${wins} 胜</span>
+            <span class="match-wl-sep">/</span>
+            <span class="match-wl loss">${losses} 负</span>
+        </div>
     `;
 }
 
@@ -424,7 +434,7 @@ export function renderPeersTable(containerId, peers) {
     const section = document.getElementById('peers-section');
     if (section) section.style.display = '';
 
-    // Sort by games descending
+    // Sort by total games descending
     const sorted = [...peers].sort((a, b) => (b.games || 0) - (a.games || 0));
 
     container.innerHTML = `
@@ -434,9 +444,10 @@ export function renderPeersTable(containerId, peers) {
                     <tr>
                         <th>玩家</th>
                         <th>总场次</th>
-                        <th>作为队友</th>
-                        <th>作为对手</th>
-                        <th>胜率（vs）</th>
+                        <th>队友场次</th>
+                        <th>队友胜率</th>
+                        <th>对手场次</th>
+                        <th>对手胜率</th>
                         <th>最后同场</th>
                     </tr>
                 </thead>
@@ -463,11 +474,31 @@ export function renderPeersTable(containerId, peers) {
 
 function renderPeerRow(peer) {
     const games = peer.games || 0;
-    const win = peer.win || 0;
     const withGames = peer.with_games || 0;
+    const withWin = peer.with_win || 0;
     const againstGames = peer.against_games || 0;
-    const winRate = games > 0 ? ((win / games) * 100).toFixed(1) : '0.0';
-    const wrClass = parseFloat(winRate) >= 55 ? 'wr-good' : parseFloat(winRate) >= 45 ? 'wr-avg' : 'wr-bad';
+    const againstWin = peer.against_win || 0;
+
+    const withWR = withGames > 0 ? ((withWin / withGames) * 100).toFixed(1) : '-';
+    const againstWR = againstGames > 0 ? ((againstWin / againstGames) * 100).toFixed(1) : '-';
+
+    const withWRClass = withGames >= 3
+        ? (parseFloat(withWR) >= 60 ? 'wr-good' : parseFloat(withWR) < 40 ? 'wr-bad' : 'wr-avg')
+        : 'wr-avg';
+    const againstWRClass = againstGames >= 3
+        ? (parseFloat(againstWR) >= 60 ? 'wr-good' : parseFloat(againstWR) < 40 ? 'wr-bad' : 'wr-avg')
+        : 'wr-avg';
+
+    // Labels based on teammate and opponent win rates
+    let label = '';
+    if (withGames >= 3) {
+        if (parseFloat(withWR) >= 60) label += '<span class="peer-tag tag-bro">🤝 好基友</span>';
+        else if (parseFloat(withWR) < 40) label += '<span class="peer-tag tag-pig">🐷 猪队友</span>';
+    }
+    if (againstGames >= 3) {
+        if (parseFloat(againstWR) >= 60) label += '<span class="peer-tag tag-beast">🐶 铁畜生</span>';
+        else if (parseFloat(againstWR) < 40) label += '<span class="peer-tag tag-nemesis">💀 真克星</span>';
+    }
 
     const lastPlayed = peer.last_played
         ? formatRelativeTime(new Date(peer.last_played * 1000), new Date())
@@ -482,12 +513,14 @@ function renderPeerRow(peer) {
                 <div class="peer-cell">
                     ${avatar ? `<img src="${avatar}" alt="" class="peer-avatar" loading="lazy">` : '<span class="peer-avatar-fallback">?</span>'}
                     <span>${escapeHtml(name)}</span>
+                    ${label}
                 </div>
             </td>
             <td class="col-games">${games}</td>
-            <td class="col-with">${withGames}</td>
-            <td class="col-against">${againstGames}</td>
-            <td class="col-winrate ${wrClass}">${winRate}%</td>
+            <td class="col-with-games">${withGames}</td>
+            <td class="col-with-wr ${withWRClass}">${withWR === '-' ? '-' : withWR + '%'}</td>
+            <td class="col-against-games">${againstGames}</td>
+            <td class="col-against-wr ${againstWRClass}">${againstWR === '-' ? '-' : againstWR + '%'}</td>
             <td class="col-time">${lastPlayed}</td>
         </tr>
     `;

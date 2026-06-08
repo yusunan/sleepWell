@@ -968,9 +968,9 @@ a:hover {
         font-size: 0.7rem;
     }
 
-    /* Hide less important columns on mobile */
-    .matches-table .col-xpm,
-    .matches-table .col-hero-dmg {
+    /* Hide less important columns on mobile — keep GPM/XPM visible */
+    .matches-table .col-duration,
+    .matches-table .col-link {
         display: none;
     }
 }
@@ -1052,9 +1052,10 @@ a:hover {
         white-space: nowrap;
     }
 
-    /* Hide more columns on very small screens */
-    .matches-table .col-gpm,
-    .matches-table .col-duration {
+    /* Hide more columns on very small screens — keep GPM/XPM */
+    .matches-table .col-k,
+    .matches-table .col-d,
+    .matches-table .col-a {
         display: none;
     }
 
@@ -1601,6 +1602,7 @@ a:hover {
     font-size: 1rem;
     line-height: 1.8;
     color: var(--text-primary);
+    white-space: pre-line;
 }
 
 /* Details */
@@ -1811,14 +1813,67 @@ a:hover {
     min-width: 120px;
 }
 
+/* Peer tags (好基友 / 猪队友) */
+.peer-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.tag-bro {
+    background: rgba(102, 187, 106, 0.15);
+    color: #66bb6a;
+    border: 1px solid rgba(102, 187, 106, 0.3);
+}
+
+.tag-pig {
+    background: rgba(244, 67, 54, 0.12);
+    color: #e57373;
+    border: 1px solid rgba(244, 67, 54, 0.25);
+}
+
+.tag-beast {
+    background: rgba(255, 152, 0, 0.12);
+    color: #ffb74d;
+    border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.tag-nemesis {
+    background: rgba(156, 39, 176, 0.12);
+    color: #ce93d8;
+    border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+/* Match win/loss count */
+.match-wl.win {
+    color: var(--color-win);
+    font-weight: 600;
+}
+
+.match-wl.loss {
+    color: var(--color-loss);
+    font-weight: 600;
+}
+
+.match-wl-sep {
+    color: var(--text-muted);
+}
+
 /* Hide less important columns on smaller screens */
 @media (max-width: 768px) {
-    .peers-table .col-against {
+    .peers-table .col-against-games,
+    .peers-table .col-against-wr {
         display: none;
     }
 }
 
 @media (max-width: 480px) {
+    .peers-table .col-games,
     .peers-table .col-time {
         display: none;
     }

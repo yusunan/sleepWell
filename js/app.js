@@ -159,10 +159,10 @@ function getListCallbacks() {
         onRefresh: () => refreshCurrentPlayer(),
     };
 }
-function switchToMyPlayer() { if (state.playerList.myId) { state.isEnemy = false; state.isTeammate = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false, false); } }
-function switchToEnemy(id) { state.isEnemy = true; state.isTeammate = false; document.getElementById('search-input').value = id; loadDashboard(String(id), true, false); }
-function switchToTeammate(id) { state.isEnemy = false; state.isTeammate = true; document.getElementById('search-input').value = id; loadDashboard(String(id), false, true); }
-function refreshCurrentPlayer() { if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
+function switchToMyPlayer() { if (state.isLoading || !state.playerList.myId) return; state.isEnemy = false; state.isTeammate = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false, false); }
+function switchToEnemy(id) { if (state.isLoading) return; state.isEnemy = true; state.isTeammate = false; document.getElementById('search-input').value = id; loadDashboard(String(id), true, false); }
+function switchToTeammate(id) { if (state.isLoading) return; state.isEnemy = false; state.isTeammate = true; document.getElementById('search-input').value = id; loadDashboard(String(id), false, true); }
+function refreshCurrentPlayer() { if (state.isLoading) return; if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
 
 async function loadPeers(accountId) {
     try {
@@ -306,6 +306,8 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
         loadPeers(accountId);
 
     } catch (err) {
+        // Silently ignore intentional cancellation (AbortError from cancelAll)
+        if (err.name === 'AbortError') return;
         console.error('[睡了么] Error:', err);
         if (err instanceof NetworkError) showNetworkError('dashboard', err.message, () => loadDashboard(accountId, isEnemy, isTeammate));
         else if (err instanceof RateLimitError) showDashboardError('dashboard', 'API 请求配额已用尽，请稍后重试', () => loadDashboard(accountId, isEnemy, isTeammate));
