@@ -111,6 +111,20 @@
     <!-- Modal Container -->
     <div id="modal-container"></div>
 
+    <!-- Version check via timestamp -->
+    <script>
+    (function(){var k='dd2_app_ts';var x=new XMLHttpRequest();
+    x.open('GET','/version.txt?_='+Date.now(),true);x.timeout=5000;
+    x.onload=function(){if(x.status===200){var ts=(x.responseText||'').trim();
+    var old=localStorage.getItem(k);
+    if(old&&ts&&old!==ts){localStorage.setItem(k,ts);
+    var a=Object.keys(localStorage).filter(function(kk){return kk.indexOf('dd2_')===0;});
+    a.forEach(function(kk){if(kk!=='dd2_player_list'&&kk.indexOf('dd2_mmr_history_')!==0)localStorage.removeItem(kk);});
+    location.reload(true);return;}
+    if(ts)localStorage.setItem(k,ts);}};
+    x.onerror=function(){};x.send();})();
+    </script>
+
     <script type="module">
         import { init } from './js/app.js';
         if (document.readyState === 'loading') {
