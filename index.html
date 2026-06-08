@@ -117,14 +117,15 @@
     <!-- Version check: detects new deploys even when index.html is cached -->
     <script>
     (function(){var k='dd2_app_version';try{var x=new XMLHttpRequest();
-    x.open('GET','/version.txt?_='+Date.now(),false);x.timeout=3000;
-    x.send();if(x.status===200){var sv=(x.responseText||'').trim();
+    x.open('GET','/version.txt?_='+Date.now(),true);x.timeout=5000;
+    x.onload=function(){if(x.status===200){var sv=(x.responseText||'').trim();
     var cv=localStorage.getItem(k);
     if(cv&&sv&&cv!==sv){localStorage.setItem(k,sv);
     var keys=Object.keys(localStorage).filter(function(kk){return kk.indexOf('dd2_')===0;});
     keys.forEach(function(kk){if(kk!=='dd2_player_list'&&kk.indexOf('dd2_mmr_history_')!==0)localStorage.removeItem(kk);});
     location.reload(true);return;}
-    if(sv)localStorage.setItem(k,sv);}}catch(e){}})();
+    if(sv)localStorage.setItem(k,sv);}};
+    x.onerror=function(){};x.send();}catch(e){}})();
     </script>
 
     <script type="module">
