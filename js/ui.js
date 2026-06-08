@@ -1691,10 +1691,15 @@ export function renderProsModal(pros, myId) {
     `;
     bindModalEvents(container);
 
-    // Attach match button handlers
-    container.querySelectorAll('[data-action="view-pro-matches"]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+    // Event delegation for match buttons (works on both desktop and mobile)
+    const body = container.querySelector('.modal-body');
+    if (body) {
+        body.addEventListener('click', async function(e) {
+            const btn = e.target.closest('[data-action="view-pro-matches"]');
+            if (!btn) return;
+            e.preventDefault();
             e.stopPropagation();
+
             const proId = btn.dataset.proId;
             const proName = btn.dataset.proName;
             const resultDiv = document.getElementById('pro-matches-result');
@@ -1760,7 +1765,7 @@ export function renderProsModal(pros, myId) {
                 `;
             }
         });
-    });
+    }
 }
 
 /**
