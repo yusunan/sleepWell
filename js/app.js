@@ -270,8 +270,11 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
         setEnemyHighlight(isEnemy);
     }
     const dashboard = document.getElementById('dashboard'); if (dashboard) dashboard.classList.add('loaded');
-    showLoading('summary-section', `别只关心赢的多不多，重要是睡的好不好`);
-    showLoading('profile-section', ''); showLoading('sleep-section', ''); showLoading('matches-section', '');
+    const LOADING_TEXT = '别只关心赢的多不多，重要是睡的好不好';
+    showLoading('summary-section', LOADING_TEXT);
+    showLoading('profile-section', ''); showLoading('sleep-section', '');
+    showLoading('matches-section', LOADING_TEXT);
+    showLoading('hero-table-section', LOADING_TEXT);
     window.location.hash = `#player-${accountId}`;
     updateRateLimitDisplay(); renderPlayerList('player-list', state.playerList, getListCallbacks());
 
@@ -361,6 +364,9 @@ function extractPatches(counts) {
 
 async function onPatchChange(accountId, isEnemy, patch) {
     state.selectedPatch = patch;
+    const LOADING_TEXT = '别只关心赢的多不多，重要是睡的好不好';
+    showLoading('summary-section', LOADING_TEXT);
+    showLoading('hero-table-section', LOADING_TEXT);
     try {
         const turboStats = await fetchTurboStats(accountId, patch);
         state.turboStats = turboStats;

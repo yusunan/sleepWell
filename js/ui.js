@@ -1461,7 +1461,7 @@ export function showModalLoading() {
             <div class="modal-card modal-loading-card">
                 <div class="modal-body" style="text-align:center;padding:48px;">
                     <div class="spinner"></div>
-                    <p class="state-text" style="margin-top:16px;">加载中...</p>
+                    <p class="state-text" style="margin-top:16px;">别只关心赢的多不多，重要是睡的好不好</p>
                 </div>
             </div>
         </div>

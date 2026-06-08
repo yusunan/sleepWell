@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>睡了么 — 加速模式中登玩家睡眠分析</title>
     <meta name="description" content="分析 Dota2 加速模式玩家的睡眠质量。">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=3">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -111,8 +114,21 @@
     <!-- Modal Container -->
     <div id="modal-container"></div>
 
+    <!-- Version check: detects new deploys even when index.html is cached -->
+    <script>
+    (function(){var k='dd2_app_version';try{var x=new XMLHttpRequest();
+    x.open('GET','/version.txt?_='+Date.now(),false);x.timeout=3000;
+    x.send();if(x.status===200){var sv=(x.responseText||'').trim();
+    var cv=localStorage.getItem(k);
+    if(cv&&sv&&cv!==sv){localStorage.setItem(k,sv);
+    var keys=Object.keys(localStorage).filter(function(kk){return kk.indexOf('dd2_')===0;});
+    keys.forEach(function(kk){if(kk!=='dd2_player_list')localStorage.removeItem(kk);});
+    location.reload(true);return;}
+    if(sv)localStorage.setItem(k,sv);}}catch(e){}})();
+    </script>
+
     <script type="module">
-        import { init } from './js/app.js';
+        import { init } from './js/app.js?v=3';
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {

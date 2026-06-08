@@ -2265,7 +2265,8 @@ a:hover {
         font-size: 0.65rem;
     }
 
-    .col-mmr {
+    .leaderboard-table .col-last-match,
+    .pros-table .col-last-match {
         display: none;
     }
 }

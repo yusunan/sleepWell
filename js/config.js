@@ -36,7 +36,7 @@ export const STORAGE_KEYS = {
 };
 
 /** Current cache version — bump this to invalidate all cached API data */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 
 /** Rate limit thresholds */
 export const RATE_LIMIT = {
