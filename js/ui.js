@@ -843,6 +843,13 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function formatFullDate(date) {
+    const y = date.getFullYear();
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 function formatRelativeTime(date, now) {
     const diffMs = now - date;
     const diffMin = Math.floor(diffMs / 60000);
@@ -1088,6 +1095,20 @@ export function renderPlayerList(containerId, playerList, callbacks) {
                 </div>
             </div>
 
+            <!-- 高级功能 Section -->
+            <div class="player-list-section">
+                <div class="player-list-label collapsible-header" data-action="toggle-collapse" data-target="collapse-advanced">
+                    <span class="collapse-arrow open" data-target="collapse-advanced">▾</span>
+                    ⚡ 高级功能
+                </div>
+                <div class="collapsible-body open" id="collapse-advanced">
+                    <div class="advanced-buttons">
+                        <button class="btn btn-sm btn-advanced" data-action="open-leaderboard">🌟 琅琊榜</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-pros">👑 与神同行</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="player-list-actions">
                 <button class="btn btn-sm btn-refresh" data-action="refresh">🔄 刷新</button>
             </div>
@@ -1182,6 +1203,14 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         // Refresh
         if (action === 'refresh' && callbacks.onRefresh) {
             callbacks.onRefresh();
+        }
+
+        // Advanced features
+        if (action === 'open-leaderboard' && callbacks.onOpenLeaderboard) {
+            callbacks.onOpenLeaderboard();
+        }
+        if (action === 'open-pros' && callbacks.onOpenPros) {
+            callbacks.onOpenPros();
         }
     });
 
@@ -1407,4 +1436,262 @@ export function renderPatchSelector(containerId, patches, selected, onChange) {
         const val = e.target.value;
         onChange(val ? parseInt(val) : null);
     });
+}
+
+// ============================================================
+// Modal Utilities
+// ============================================================
+
+/**
+ * Close and remove the modal.
+ */
+export function closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.remove();
+}
+
+/**
+ * Show a loading spinner in the modal.
+ */
+export function showModalLoading() {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-loading-card">
+                <div class="modal-body" style="text-align:center;padding:48px;">
+                    <div class="spinner"></div>
+                    <p class="state-text" style="margin-top:16px;">加载中...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
+}
+
+/**
+ * Show a simple alert-style modal with a message.
+ * @param {string} message
+ */
+export function showModalAlert(message) {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-alert">
+                <div class="modal-header">
+                    <span class="modal-title">提示</span>
+                    <button class="modal-close" data-action="close-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-alert-text">${escapeHtml(message)}</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-sm" data-action="close-modal">确定</button>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
+}
+
+/**
+ * Render the leaderboard modal (琅琊榜).
+ * @param {string} containerId - The modal container ID
+ * @param {Array} players - Array of top player objects
+ */
+export function renderLeaderboardModal(players) {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    if (!players || players.length === 0) {
+        showModalAlert('暂无加速模式排行榜数据');
+        return;
+    }
+
+    const nowSec = Date.now() / 1000;
+    const thirtyDays = 30 * 24 * 60 * 60;
+
+    // Helper: normalize last_match_time to Unix timestamp (seconds).
+    // OpenDota can return ISO string or numeric timestamp.
+    const toTimestamp = (val) => {
+        if (val == null) return 0;
+        if (typeof val === 'number') return val;
+        // ISO string like "2026-06-07T17:43:04.000Z"
+        const t = new Date(val).getTime() / 1000;
+        return isNaN(t) ? 0 : t;
+    };
+
+    // Filter: only players active in last 30 days, take top 30
+    const active = players
+        .filter(p => {
+            const ts = toTimestamp(p.last_match_time);
+            return ts > 0 && (nowSec - ts) < thirtyDays;
+        })
+        .slice(0, 30);
+
+    if (active.length === 0) {
+        showModalAlert('最近30天内暂无活跃的加速模式高排名玩家');
+        return;
+    }
+
+    const rows = active.map((p, i) => {
+        const avatar = p.avatar || p.avatarmedium || '';
+        const name = escapeHtml(p.personaname || p.name || `玩家 ${p.account_id}`);
+        const mmrVal = p.computed_mmr ?? p.mmr_estimate ?? p.computed_mmr_turbo ?? null;
+        const mmr = mmrVal != null ? Math.round(mmrVal).toLocaleString() : '-';
+        const ts = toTimestamp(p.last_match_time);
+        const lastMatch = ts > 0
+            ? formatRelativeTime(new Date(ts * 1000), new Date())
+            : '未知';
+
+        return `
+            <tr class="leaderboard-row">
+                <td class="col-rank">${i + 1}</td>
+                <td class="col-player">
+                    <div class="leaderboard-player">
+                        ${avatar ? `<img src="${avatar}" alt="" class="leaderboard-avatar" loading="lazy">` : '<span class="leaderboard-avatar-fallback">?</span>'}
+                        <span class="leaderboard-name">${name}</span>
+                    </div>
+                </td>
+                <td class="col-mmr">${mmr}</td>
+                <td class="col-last-match">${lastMatch}</td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-leaderboard">
+                <div class="modal-header">
+                    <span class="modal-title">🌟 琅琊榜 — 加速模式高手</span>
+                    <button class="modal-close" data-action="close-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-table-wrapper">
+                        <table class="data-table leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-rank">#</th>
+                                    <th class="col-player">玩家</th>
+                                    <th class="col-mmr">隐藏分</th>
+                                    <th class="col-last-match">最后游戏</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="modal-count">共 ${active.length} 名玩家（近30天活跃）</div>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
+}
+
+/**
+ * Render the pros modal (与神同行).
+ * @param {Array} pros - Array of pro player objects
+ */
+export function renderProsModal(pros) {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    if (!pros || pros.length === 0) {
+        showModalAlert('暂无与职业选手同排的记录');
+        return;
+    }
+
+    // Helper: normalize last_match_time to Unix timestamp (seconds)
+    const toTimestamp = (val) => {
+        if (val == null) return 0;
+        if (typeof val === 'number') return val;
+        const t = new Date(val).getTime() / 1000;
+        return isNaN(t) ? 0 : t;
+    };
+
+    const rows = pros.map(p => {
+        const avatar = p.avatar || p.avatarmedium || '';
+        const personaname = escapeHtml(p.personaname || `选手 ${p.account_id}`);
+        const proName = escapeHtml(p.name || '-');
+        const teamName = escapeHtml(p.team_name || p.team_tag || '-');
+        const lastPlayed = p.last_played || 0;
+        const lastMatch = lastPlayed > 0
+            ? formatFullDate(new Date(lastPlayed * 1000))
+            : '未知';
+
+        return `
+            <tr class="pros-row">
+                <td class="col-player">
+                    <div class="leaderboard-player">
+                        ${avatar ? `<img src="${avatar}" alt="" class="leaderboard-avatar" loading="lazy">` : '<span class="leaderboard-avatar-fallback">?</span>'}
+                        <span class="leaderboard-name">${personaname}</span>
+                    </div>
+                </td>
+                <td class="col-pro-name">${proName}</td>
+                <td class="col-team">${teamName}</td>
+                <td class="col-last-match">${lastMatch}</td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-pros">
+                <div class="modal-header">
+                    <span class="modal-title">👑 与神同行</span>
+                    <button class="modal-close" data-action="close-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-table-wrapper">
+                        <table class="data-table pros-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-player">选手</th>
+                                    <th class="col-pro-name">职业名</th>
+                                    <th class="col-team">职业队</th>
+                                    <th class="col-last-match">最后同场</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="modal-count">共 ${pros.length} 位职业选手</div>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
+}
+
+/**
+ * Bind close events to a freshly-rendered modal.
+ */
+function bindModalEvents(container) {
+    const overlay = container.querySelector('#modal-overlay');
+    if (!overlay) return;
+
+    // Close on overlay click (outside the card)
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Close on close button click
+    overlay.querySelectorAll('[data-action="close-modal"]').forEach(btn => {
+        btn.addEventListener('click', () => closeModal());
+    });
+
+    // Close on ESC key
+    const onKey = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', onKey);
+        }
+    };
+    document.addEventListener('keydown', onKey);
 }

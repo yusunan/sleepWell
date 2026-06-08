@@ -309,3 +309,27 @@ export async function getPeers(accountId) {
         cacheTtl: CACHE_TTL.STATS,
     });
 }
+
+/**
+ * Get top players by turbo MMR (琅琊榜).
+ */
+export async function getTopPlayers() {
+    return request('/topPlayers', { turbo: 1 }, {
+        cacheKey: 'dd2_top_players_turbo',
+        cacheTtl: CACHE_TTL.STATS,
+    });
+}
+
+/**
+ * Get pro players the given account has played with (与神同行).
+ * Only Turbo mode.
+ */
+export async function getPlayerPros(accountId) {
+    return request(`/players/${accountId}/pros`, {
+        game_mode: 23,
+        significant: 0,
+    }, {
+        cacheKey: STORAGE_KEYS.STATS_PREFIX + accountId + '_pros',
+        cacheTtl: CACHE_TTL.STATS,
+    });
+}

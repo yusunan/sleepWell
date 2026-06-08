@@ -1930,3 +1930,343 @@ a:hover {
     }
 }
 
+/* ============================================================
+   Advanced Features — Sidebar Buttons
+   ============================================================ */
+
+.advanced-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.btn-advanced {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    border: 1px solid rgba(255, 215, 0, 0.25);
+    background: rgba(255, 215, 0, 0.06);
+    color: #ffd700;
+    cursor: pointer;
+    border-radius: var(--border-radius-sm);
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.btn-advanced:hover {
+    background: rgba(255, 215, 0, 0.15);
+    border-color: rgba(255, 215, 0, 0.45);
+    color: #ffe566;
+}
+
+/* ============================================================
+   Modal System
+   ============================================================ */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    width: 100%;
+    max-width: 640px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalSlideIn 0.25s ease;
+}
+
+@keyframes modalSlideIn {
+    from { opacity: 0; transform: translateY(-20px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-alert {
+    max-width: 400px;
+}
+
+.modal-loading-card {
+    max-width: 300px;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.modal-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--border-radius-sm);
+    transition: all 0.15s;
+    line-height: 1;
+    font-family: inherit;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.modal-alert-text {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    line-height: 1.7;
+    text-align: center;
+}
+
+.modal-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 12px;
+    text-align: right;
+}
+
+.modal-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
+   Leaderboard & Pros Tables
+   ============================================================ */
+
+.leaderboard-table,
+.pros-table {
+    font-size: 0.875rem;
+}
+
+.leaderboard-row,
+.pros-row {
+    transition: background 0.15s;
+}
+
+.leaderboard-row:hover,
+.pros-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.col-rank {
+    width: 40px;
+    text-align: center;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.col-player {
+    min-width: 120px;
+}
+
+.col-mmr {
+    min-width: 70px;
+}
+
+.col-last-match {
+    min-width: 80px;
+}
+
+.col-team {
+    min-width: 100px;
+}
+
+.col-pro-name {
+    min-width: 80px;
+}
+
+.leaderboard-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.leaderboard-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border-color);
+}
+
+.leaderboard-avatar-fallback {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #3a3d45;
+    color: #9098a8;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.leaderboard-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+}
+
+/* ============================================================
+   Modal Responsive
+   ============================================================ */
+
+@media (max-width: 768px) {
+    .modal-overlay {
+        padding: 12px;
+        align-items: flex-end;
+    }
+
+    .modal-card {
+        max-width: 100%;
+        max-height: 85vh;
+        border-radius: var(--border-radius) var(--border-radius) 0 0;
+    }
+
+    .modal-header {
+        padding: 12px 16px;
+    }
+
+    .modal-title {
+        font-size: 0.95rem;
+    }
+
+    .modal-body {
+        padding: 14px;
+    }
+
+    .modal-footer {
+        padding: 10px 16px;
+    }
+
+    .modal-alert {
+        max-width: 100%;
+    }
+
+    .leaderboard-avatar {
+        width: 28px;
+        height: 28px;
+    }
+
+    .leaderboard-avatar-fallback {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+    }
+
+    .leaderboard-name {
+        max-width: 100px;
+    }
+
+    .col-pro-name {
+        display: none;
+    }
+
+    .leaderboard-table,
+    .pros-table {
+        font-size: 0.8rem;
+    }
+
+    .leaderboard-table th,
+    .leaderboard-table td,
+    .pros-table th,
+    .pros-table td {
+        padding: 8px 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-overlay {
+        padding: 8px;
+    }
+
+    .modal-header {
+        padding: 10px 14px;
+    }
+
+    .modal-body {
+        padding: 10px;
+    }
+
+    .leaderboard-name {
+        max-width: 80px;
+    }
+
+    .leaderboard-table,
+    .pros-table {
+        font-size: 0.75rem;
+    }
+
+    .leaderboard-table th,
+    .leaderboard-table td,
+    .pros-table th,
+    .pros-table td {
+        padding: 6px 8px;
+    }
+
+    .leaderboard-avatar {
+        width: 24px;
+        height: 24px;
+    }
+
+    .leaderboard-avatar-fallback {
+        width: 24px;
+        height: 24px;
+        font-size: 0.65rem;
+    }
+
+    .col-mmr {
+        display: none;
+    }
+}
+

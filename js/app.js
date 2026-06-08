@@ -14,6 +14,8 @@ import {
     getTurboCounts,
     fetchTurboStats,
     getPeers,
+    getTopPlayers,
+    getPlayerPros,
     getRateLimitStatus,
     cancelAll,
     PlayerNotFoundError,
@@ -43,6 +45,11 @@ import {
     renderPatchSelector,
     setEnemyHighlight,
     setTeammateHighlight,
+    closeModal,
+    showModalLoading,
+    renderLeaderboardModal,
+    renderProsModal,
+    showModalAlert,
 } from './ui.js';
 import {
     createWinRateTrend,
@@ -157,12 +164,41 @@ function getListCallbacks() {
         onAddTeammate: (id, note) => addTeammateId(id, note),
         onRemoveTeammate: (id) => removeTeammateId(id),
         onRefresh: () => refreshCurrentPlayer(),
+        onOpenLeaderboard: () => openLeaderboard(),
+        onOpenPros: () => openPros(),
     };
 }
 function switchToMyPlayer() { if (state.isLoading || !state.playerList.myId) return; state.isEnemy = false; state.isTeammate = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false, false); }
 function switchToEnemy(id) { if (state.isLoading) return; state.isEnemy = true; state.isTeammate = false; document.getElementById('search-input').value = id; loadDashboard(String(id), true, false); }
 function switchToTeammate(id) { if (state.isLoading) return; state.isEnemy = false; state.isTeammate = true; document.getElementById('search-input').value = id; loadDashboard(String(id), false, true); }
 function refreshCurrentPlayer() { if (state.isLoading) return; if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
+
+async function openLeaderboard() {
+    try {
+        showModalLoading();
+        const data = await getTopPlayers();
+        const players = data?.players || (Array.isArray(data) ? data : []);
+        renderLeaderboardModal(players);
+    } catch (err) {
+        console.error('[睡了么] Leaderboard error:', err);
+        showModalAlert('加载琅琊榜失败: ' + (err.message || '未知错误'));
+    }
+}
+
+async function openPros() {
+    if (!state.playerList.myId) {
+        showModalAlert('请先在左侧「本人」区域设置您的 Steam32 ID');
+        return;
+    }
+    try {
+        showModalLoading();
+        const pros = await getPlayerPros(state.playerList.myId);
+        renderProsModal(Array.isArray(pros) ? pros : []);
+    } catch (err) {
+        console.error('[睡了么] Pros error:', err);
+        showModalAlert('加载与神同行数据失败: ' + (err.message || '未知错误'));
+    }
+}
 
 async function loadPeers(accountId) {
     try {
