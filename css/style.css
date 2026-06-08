@@ -1899,15 +1899,28 @@ a:hover {
 }
 
 @media (max-width: 640px) {
-    .peers-table .col-tag {
+    .peers-table .col-with-games,
+    .peers-table .col-with-wr {
         display: none;
     }
-}
-
-@media (max-width: 480px) {
-    .peers-table .col-games,
+    .peers-table {
+        table-layout: fixed;
+    }
+    .peers-table .col-peer-name {
+        width: 36%;
+    }
+    .peers-table .col-tag {
+        width: 32%;
+    }
+    .peers-table .col-games {
+        width: 14%;
+    }
     .peers-table .col-time {
-        display: none;
+        width: 18%;
+    }
+    .peer-name-text {
+        max-width: none;
+        display: block;
     }
 }
 

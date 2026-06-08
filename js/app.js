@@ -276,6 +276,7 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
 
         // Compute summary from counts + totals
         const computedStats = computeSummaryFromData(turboCounts, turboStats, turboMatches);
+        computedStats.computedMmrTurbo = profile?.computed_mmr_turbo ?? null;
         state.sleepEval = evaluateSleep(state.allRecentMatches, state.heroMap);
 
         // Render
@@ -328,6 +329,7 @@ async function onPatchChange(accountId, isEnemy, patch) {
         const turboStats = await fetchTurboStats(accountId, patch);
         state.turboStats = turboStats;
         const computedStats = computeSummaryFromData(state.turboCounts, turboStats, state.turboMatches);
+        computedStats.computedMmrTurbo = state.profile?.computed_mmr_turbo ?? null;
         state.turboStats = turboStats;
         renderTurboSummary('summary-section', computedStats);
         renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null);

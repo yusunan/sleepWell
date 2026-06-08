@@ -164,15 +164,19 @@ export function renderTurboSummary(containerId, stats) {
         direWR = 0,
         coreGames = 0,
         supportGames = 0,
+        computedMmrTurbo = null,
     } = stats;
 
     const kda = avgDeaths > 0
         ? ((avgKills + avgAssists) / avgDeaths).toFixed(1)
         : (avgKills + avgAssists).toFixed(1);
 
+    const mmrValue = computedMmrTurbo != null ? Math.round(computedMmrTurbo).toLocaleString() : '未校准';
+
     const cards = [
         { icon: '🎮', label: '加速模式场次', value: totalGames.toLocaleString(), color: '' },
         { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'win' : 'loss' },
+        { icon: '📊', label: '隐藏分(加速)', value: mmrValue, color: '' },
         { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
         { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
@@ -883,6 +887,7 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
         direWR: turboStats.direWR || 0,
         coreGames: turboStats.coreGames || 0,
         supportGames: turboStats.supportGames || 0,
+        computedMmrTurbo: turboStats.computedMmrTurbo ?? null,
     });
 
     // Hero table
