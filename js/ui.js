@@ -197,7 +197,13 @@ export function renderTurboSummary(containerId, stats) {
 // --- Hero Table ---
 
 export let heroTableSort = { field: 'games', asc: false };
+export let matchTableSort = { field: 'time', asc: false };
+export let peersTableSort = { field: 'games', asc: false };
 
+// Store last rendered data for re-sort without re-fetch
+let lastMatchesData = null;
+let lastMatchesHeroMap = null;
+let lastPeersData = null;
 export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
     const container = $(containerId);
     if (!container) return;
@@ -209,6 +215,12 @@ export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
 
     // Sort heroes
     const sorted = [...heroes].sort((a, b) => {
+        if (heroTableSort.field === 'hero') {
+            const aName = (heroMap.get(a.hero_id)?.localized_name || '');
+            const bName = (heroMap.get(b.hero_id)?.localized_name || '');
+            const cmp = aName.localeCompare(bName, 'zh');
+            return heroTableSort.asc ? cmp : -cmp;
+        }
         const aVal = getHeroField(a, heroTableSort.field);
         const bVal = getHeroField(b, heroTableSort.field);
         if (heroTableSort.asc) return aVal - bVal;
@@ -216,7 +228,7 @@ export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
     });
 
     const columns = [
-        { key: 'hero', label: '英雄', sortable: false },
+        { key: 'hero', label: '英雄', sortable: true },
         { key: 'games', label: '场次', sortable: true },
         { key: 'winrate', label: '胜率', sortable: true },
     ];
@@ -320,10 +332,17 @@ export function renderRecentMatches(containerId, matches, heroMap) {
     const container = $(containerId);
     if (!container) return;
 
+    // Store data for re-sort
+    lastMatchesData = matches;
+    lastMatchesHeroMap = heroMap;
+
     if (!matches || matches.length === 0) {
         showEmpty(containerId, '近期暂无加速模式比赛记录');
         return;
     }
+
+    // Sort matches
+    const sorted = sortMatches([...matches], matchTableSort, heroMap);
 
     // Count wins and losses
     let wins = 0, losses = 0;
@@ -332,26 +351,40 @@ export function renderRecentMatches(containerId, matches, heroMap) {
         else losses++;
     }
 
+    const sortIndicator = (key) => {
+        if (matchTableSort.field !== key) return '';
+        return matchTableSort.asc ? ' ▲' : ' ▼';
+    };
+
+    const columns = [
+        { key: 'time', label: '时间', sortable: true },
+        { key: 'hero', label: '英雄', sortable: true },
+        { key: 'result', label: '结果', sortable: true },
+        { key: 'k', label: 'K', sortable: true },
+        { key: 'd', label: 'D', sortable: true },
+        { key: 'a', label: 'A', sortable: true },
+        { key: 'kda', label: 'KDA', sortable: true },
+        { key: 'gpm', label: 'GPM', sortable: true },
+        { key: 'xpm', label: 'XPM', sortable: true },
+        { key: 'duration', label: '时长', sortable: true },
+        { key: 'link', label: '比赛', sortable: false },
+    ];
+
     container.innerHTML = `
         <div class="matches-table-wrapper">
             <table class="data-table matches-table">
                 <thead>
                     <tr>
-                        <th>时间</th>
-                        <th>英雄</th>
-                        <th>结果</th>
-                        <th>K</th>
-                        <th>D</th>
-                        <th>A</th>
-                        <th>KDA</th>
-                        <th>GPM</th>
-                        <th>XPM</th>
-                        <th>时长</th>
-                        <th>比赛</th>
+                        ${columns.map(c => `
+                            <th class="${c.sortable ? 'sortable' : ''} col-${c.key}"
+                                ${c.sortable ? `data-sort="${c.key}"` : ''}>
+                                ${c.label}${sortIndicator(c.key)}
+                            </th>
+                        `).join('')}
                     </tr>
                 </thead>
                 <tbody>
-                    ${matches.map(m => renderMatchRow(m, heroMap)).join('')}
+                    ${sorted.map(m => renderMatchRow(m, heroMap)).join('')}
                 </tbody>
             </table>
         </div>
@@ -362,6 +395,68 @@ export function renderRecentMatches(containerId, matches, heroMap) {
             <span class="match-wl loss">${losses} 负</span>
         </div>
     `;
+
+    // Attach sort handlers
+    container.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const field = th.dataset.sort;
+            if (matchTableSort.field === field) {
+                matchTableSort.asc = !matchTableSort.asc;
+            } else {
+                matchTableSort.field = field;
+                matchTableSort.asc = false;
+            }
+            if (lastMatchesData) renderRecentMatches(containerId, lastMatchesData, lastMatchesHeroMap);
+        });
+    });
+}
+
+/** Sort matches by the given field */
+function sortMatches(matches, sort, heroMap) {
+    const { field, asc } = sort;
+    const mul = asc ? 1 : -1;
+    return matches.sort((a, b) => {
+        let va, vb;
+        switch (field) {
+            case 'time':
+                va = a.start_time; vb = b.start_time;
+                break;
+            case 'hero': {
+                const ha = heroMap?.get(a.hero_id)?.localized_name || '';
+                const hb = heroMap?.get(b.hero_id)?.localized_name || '';
+                return mul * ha.localeCompare(hb, 'zh');
+            }
+            case 'result':
+                va = ((a.player_slot < 128) === a.radiant_win) ? 1 : 0;
+                vb = ((b.player_slot < 128) === b.radiant_win) ? 1 : 0;
+                break;
+            case 'k':
+                va = a.kills || 0; vb = b.kills || 0;
+                break;
+            case 'd':
+                va = a.deaths || 0; vb = b.deaths || 0;
+                break;
+            case 'a':
+                va = a.assists || 0; vb = b.assists || 0;
+                break;
+            case 'kda':
+                va = a.deaths > 0 ? (a.kills + a.assists) / a.deaths : (a.kills + a.assists);
+                vb = b.deaths > 0 ? (b.kills + b.assists) / b.deaths : (b.kills + b.assists);
+                break;
+            case 'gpm':
+                va = a.gold_per_min || 0; vb = b.gold_per_min || 0;
+                break;
+            case 'xpm':
+                va = a.xp_per_min || 0; vb = b.xp_per_min || 0;
+                break;
+            case 'duration':
+                va = a.duration || 0; vb = b.duration || 0;
+                break;
+            default:
+                return 0;
+        }
+        return mul * (va - vb);
+    });
 }
 
 function renderMatchRow(match, heroMap) {
@@ -425,6 +520,9 @@ export function renderPeersTable(containerId, peers) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
+    // Store data for re-sort
+    lastPeersData = peers;
+
     if (!peers || peers.length === 0) {
         const section = document.getElementById('peers-section');
         if (section) section.style.display = 'none';
@@ -434,21 +532,36 @@ export function renderPeersTable(containerId, peers) {
     const section = document.getElementById('peers-section');
     if (section) section.style.display = '';
 
-    // Sort by total games descending
-    const sorted = [...peers].sort((a, b) => (b.games || 0) - (a.games || 0));
+    // Sort peers
+    const sorted = sortPeers([...peers], peersTableSort);
+
+    const sortIndicator = (key) => {
+        if (peersTableSort.field !== key) return '';
+        return peersTableSort.asc ? ' ▲' : ' ▼';
+    };
+
+    const columns = [
+        { key: 'peer-name', label: '玩家', sortable: true },
+        { key: 'tag', label: '标签', sortable: false },
+        { key: 'games', label: '总场次', sortable: true },
+        { key: 'with-games', label: '队友场次', sortable: true },
+        { key: 'with-wr', label: '队友胜率', sortable: true },
+        { key: 'against-games', label: '对手场次', sortable: true },
+        { key: 'against-wr', label: '对手胜率', sortable: true },
+        { key: 'time', label: '最后同场', sortable: true },
+    ];
 
     container.innerHTML = `
         <div class="peers-table-wrapper">
             <table class="data-table peers-table">
                 <thead>
                     <tr>
-                        <th>玩家</th>
-                        <th>总场次</th>
-                        <th>队友场次</th>
-                        <th>队友胜率</th>
-                        <th>对手场次</th>
-                        <th>对手胜率</th>
-                        <th>最后同场</th>
+                        ${columns.map(c => `
+                            <th class="${c.sortable ? 'sortable' : ''} col-${c.key}"
+                                ${c.sortable ? `data-sort="${c.key}"` : ''}>
+                                ${c.label}${sortIndicator(c.key)}
+                            </th>
+                        `).join('')}
                     </tr>
                 </thead>
                 <tbody>
@@ -458,6 +571,21 @@ export function renderPeersTable(containerId, peers) {
         </div>
         <div class="peers-count">共 ${peers.length} 位玩家</div>
     `;
+
+    // Attach sort handlers
+    container.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const field = th.dataset.sort;
+            if (peersTableSort.field === field) {
+                peersTableSort.asc = !peersTableSort.asc;
+            } else {
+                peersTableSort.field = field;
+                peersTableSort.asc = false;
+            }
+            if (lastPeersData) renderPeersTable(containerId, lastPeersData);
+        });
+    });
 
     // Click to navigate to peer's analysis
     const rows = container.querySelectorAll('.peer-row');
@@ -469,6 +597,44 @@ export function renderPeersTable(containerId, peers) {
                 document.getElementById('search-form')?.dispatchEvent(new Event('submit'));
             }
         });
+    });
+}
+
+/** Sort peers by the given field */
+function sortPeers(peers, sort) {
+    const { field, asc } = sort;
+    const mul = asc ? 1 : -1;
+    return peers.sort((a, b) => {
+        let va, vb;
+        switch (field) {
+            case 'peer-name':
+                va = a.personaname || `玩家${a.account_id}`;
+                vb = b.personaname || `玩家${b.account_id}`;
+                return mul * va.localeCompare(vb, 'zh');
+            case 'games':
+                va = a.games || 0; vb = b.games || 0;
+                break;
+            case 'with-games':
+                va = a.with_games || 0; vb = b.with_games || 0;
+                break;
+            case 'with-wr':
+                va = a.with_games > 0 ? (a.with_win || 0) / a.with_games : -1;
+                vb = b.with_games > 0 ? (b.with_win || 0) / b.with_games : -1;
+                break;
+            case 'against-games':
+                va = a.against_games || 0; vb = b.against_games || 0;
+                break;
+            case 'against-wr':
+                va = a.against_games > 0 ? (a.against_win || 0) / a.against_games : -1;
+                vb = b.against_games > 0 ? (b.against_win || 0) / b.against_games : -1;
+                break;
+            case 'time':
+                va = a.last_played || 0; vb = b.last_played || 0;
+                break;
+            default:
+                return 0;
+        }
+        return mul * (va - vb);
     });
 }
 
@@ -512,10 +678,10 @@ function renderPeerRow(peer) {
             <td class="col-peer-name">
                 <div class="peer-cell">
                     ${avatar ? `<img src="${avatar}" alt="" class="peer-avatar" loading="lazy">` : '<span class="peer-avatar-fallback">?</span>'}
-                    <span>${escapeHtml(name)}</span>
-                    ${label}
+                    <span class="peer-name-text">${escapeHtml(name)}</span>
                 </div>
             </td>
+            <td class="col-tag">${label || '<span class="peer-tag-empty">-</span>'}</td>
             <td class="col-games">${games}</td>
             <td class="col-with-games">${withGames}</td>
             <td class="col-with-wr ${withWRClass}">${withWR === '-' ? '-' : withWR + '%'}</td>

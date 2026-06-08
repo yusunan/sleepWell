@@ -969,8 +969,10 @@ a:hover {
     }
 
     /* Hide less important columns on mobile — keep GPM/XPM visible */
-    .matches-table .col-duration,
-    .matches-table .col-link {
+    .matches-table th.col-duration,
+    .matches-table td.col-duration,
+    .matches-table th.col-link,
+    .matches-table td.col-link {
         display: none;
     }
 }
@@ -1053,9 +1055,12 @@ a:hover {
     }
 
     /* Hide more columns on very small screens — keep GPM/XPM */
-    .matches-table .col-k,
-    .matches-table .col-d,
-    .matches-table .col-a {
+    .matches-table th.col-k,
+    .matches-table td.col-k,
+    .matches-table th.col-d,
+    .matches-table td.col-d,
+    .matches-table th.col-a,
+    .matches-table td.col-a {
         display: none;
     }
 
@@ -1810,7 +1815,24 @@ a:hover {
 }
 
 .col-peer-name {
-    min-width: 120px;
+    min-width: 100px;
+    max-width: 160px;
+}
+
+.peer-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Tag column */
+.col-tag {
+    min-width: 60px;
+}
+
+.peer-tag-empty {
+    color: var(--text-muted);
+    font-size: 0.65rem;
 }
 
 /* Peer tags (好基友 / 猪队友) */
@@ -1821,8 +1843,10 @@ a:hover {
     border-radius: 8px;
     font-weight: 600;
     white-space: nowrap;
-    margin-left: 4px;
     vertical-align: middle;
+}
+.peer-tag + .peer-tag {
+    margin-left: 4px;
 }
 
 .tag-bro {
@@ -1874,6 +1898,7 @@ a:hover {
 
 @media (max-width: 480px) {
     .peers-table .col-games,
+    .peers-table .col-tag,
     .peers-table .col-time {
         display: none;
     }
