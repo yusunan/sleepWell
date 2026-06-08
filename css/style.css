@@ -451,6 +451,10 @@ a:hover {
     padding: 20px;
 }
 
+.chart-card-full {
+    grid-column: 1 / -1;
+}
+
 .chart-title {
     font-size: 0.95rem;
     font-weight: 600;

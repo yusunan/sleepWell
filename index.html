@@ -122,13 +122,13 @@
     var cv=localStorage.getItem(k);
     if(cv&&sv&&cv!==sv){localStorage.setItem(k,sv);
     var keys=Object.keys(localStorage).filter(function(kk){return kk.indexOf('dd2_')===0;});
-    keys.forEach(function(kk){if(kk!=='dd2_player_list')localStorage.removeItem(kk);});
+    keys.forEach(function(kk){if(kk!=='dd2_player_list'&&kk.indexOf('dd2_mmr_history_')!==0)localStorage.removeItem(kk);});
     location.reload(true);return;}
     if(sv)localStorage.setItem(k,sv);}}catch(e){}})();
     </script>
 
     <script type="module">
-        import { init } from './js/app.js?v=3';
+        import { init } from './js/app.js?v=4';
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {

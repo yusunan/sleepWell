@@ -230,6 +230,91 @@ export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 
     });
 }
 
+/**
+ * Create an MMR (hidden rating) trend line chart.
+ *
+ * @param {HTMLCanvasElement} canvas - The canvas element
+ * @param {Array} history - Array of {ts: unix_ms, mmr: number}, sorted by ts ascending
+ * @returns {Chart} Chart.js instance, or null if insufficient data
+ */
+export function createMmrTrendChart(canvas, history) {
+    if (!window.Chart) {
+        console.warn('Chart.js not loaded');
+        return null;
+    }
+
+    if (!history || history.length === 0) return null;
+
+    const labels = history.map(h => {
+        const d = new Date(h.ts);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+    const values = history.map(h => h.mmr);
+
+    // Color based on trend: green if rising, red if falling, neutral otherwise
+    const firstVal = values[0];
+    const lastVal = values[values.length - 1];
+    let lineColor = '#9098a8';
+    if (values.length >= 2) {
+        if (lastVal > firstVal) lineColor = '#4caf50';
+        else if (lastVal < firstVal) lineColor = '#f44336';
+    }
+
+    return new window.Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: '隐藏分',
+                data: values,
+                borderColor: lineColor,
+                backgroundColor: lineColor.replace(')', ', 0.1)').replace('rgb', 'rgba'),
+                borderWidth: 2,
+                pointRadius: 4,
+                pointBackgroundColor: lineColor,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1,
+                tension: 0.3,
+                fill: true,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#9098a8', font: { size: 11 } },
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#9098a8',
+                        font: { size: 11 },
+                        callback: v => Math.round(v).toLocaleString(),
+                    },
+                },
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#9098a8', font: { size: 12 } },
+                },
+                tooltip: {
+                    callbacks: {
+                        label(ctx) {
+                            return `隐藏分: ${Math.round(ctx.parsed.y).toLocaleString()}`;
+                        },
+                    },
+                },
+            },
+        },
+    });
+}
+
 // --- Helpers ---
 
 /**

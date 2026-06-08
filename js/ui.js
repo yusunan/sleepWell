@@ -947,6 +947,12 @@ export function renderChartCanvases() {
                     <canvas id="hero-perf-chart"></canvas>
                 </div>
             </div>
+            <div class="chart-card chart-card-full">
+                <h3 class="chart-title">隐藏分趋势</h3>
+                <div class="chart-container">
+                    <canvas id="mmr-trend-chart"></canvas>
+                </div>
+            </div>
         </div>
     `;
 }

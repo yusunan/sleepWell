@@ -84,10 +84,11 @@ export function clearAll() {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            // Keep player list and cache version
+            // Keep player list, cache version, and MMR history
             if (key && key.startsWith(NAMESPACE)
                 && key !== 'dd2_player_list'
-                && key !== 'dd2_cache_version') {
+                && key !== 'dd2_cache_version'
+                && !key.startsWith('dd2_mmr_history_')) {
                 keysToRemove.push(key);
             }
         }
