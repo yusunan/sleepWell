@@ -330,3 +330,16 @@ export async function getPlayerPros(accountId) {
         cacheTtl: CACHE_TTL.STATS,
     });
 }
+
+/**
+ * Get matches played with a specific player (Turbo mode only).
+ * @param {string} accountId - The main player's ID
+ * @param {string} includedAccountId - The pro/other player's ID to filter by
+ */
+export async function getMatchesWithPlayer(accountId, includedAccountId) {
+    return request(`/players/${accountId}/matches`, {
+        game_mode: 23,
+        significant: 0,
+        included_account_id: includedAccountId,
+    });
+}

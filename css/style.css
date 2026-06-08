@@ -2125,6 +2125,66 @@ a:hover {
     min-width: 80px;
 }
 
+.col-action {
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Pro matches button in modal */
+.btn-pro-matches {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    border: 1px solid var(--color-turbo);
+    background: rgba(230, 126, 34, 0.1);
+    color: var(--color-turbo);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.btn-pro-matches:hover {
+    background: rgba(230, 126, 34, 0.2);
+}
+
+.btn-pro-matches.active {
+    background: var(--color-turbo);
+    color: #fff;
+}
+
+/* Pro matches sub-section in modal */
+.pro-matches-section {
+    margin-top: 16px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.pro-matches-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.pro-matches-loading {
+    margin-top: 16px;
+    padding: 20px;
+    text-align: center;
+    border-top: 1px solid var(--border-color);
+}
+
+.pro-matches-table {
+    font-size: 0.8rem;
+}
+
+.pro-match-row code {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--bg-input);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
 .leaderboard-player {
     display: flex;
     align-items: center;
@@ -2213,6 +2273,10 @@ a:hover {
     }
 
     .col-pro-name {
+        display: none;
+    }
+
+    .pros-table .col-team {
         display: none;
     }
 

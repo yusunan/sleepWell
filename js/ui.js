@@ -3,6 +3,7 @@
 // ============================================================
 
 import { RANK_MEDALS, LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
+import { getMatchesWithPlayer } from './api.js';
 
 // --- Tiny DOM Builder ---
 
@@ -1611,8 +1612,9 @@ export function renderLeaderboardModal(players) {
 /**
  * Render the pros modal (与神同行).
  * @param {Array} pros - Array of pro player objects
+ * @param {string} [myId] - Current player's Steam32 ID (for match lookup)
  */
-export function renderProsModal(pros) {
+export function renderProsModal(pros, myId) {
     const container = document.getElementById('modal-container');
     if (!container) return;
 
@@ -1650,6 +1652,9 @@ export function renderProsModal(pros) {
                 <td class="col-pro-name">${proName}</td>
                 <td class="col-team">${teamName}</td>
                 <td class="col-last-match">${lastMatch}</td>
+                <td class="col-action">
+                    <button class="btn btn-sm btn-pro-matches" data-action="view-pro-matches" data-pro-id="${escapeHtml(String(p.account_id))}" data-pro-name="${escapeHtml(personaname)}">比赛</button>
+                </td>
             </tr>
         `;
     }).join('');
@@ -1670,6 +1675,7 @@ export function renderProsModal(pros) {
                                     <th class="col-pro-name">职业名</th>
                                     <th class="col-team">职业队</th>
                                     <th class="col-last-match">最后同场</th>
+                                    <th class="col-action">比赛</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1677,12 +1683,117 @@ export function renderProsModal(pros) {
                             </tbody>
                         </table>
                     </div>
+                    <div id="pro-matches-result"></div>
                     <div class="modal-count">共 ${pros.length} 位职业选手</div>
                 </div>
             </div>
         </div>
     `;
     bindModalEvents(container);
+
+    // Attach match button handlers
+    container.querySelectorAll('[data-action="view-pro-matches"]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const proId = btn.dataset.proId;
+            const proName = btn.dataset.proName;
+            const resultDiv = document.getElementById('pro-matches-result');
+            if (!resultDiv || !myId) return;
+
+            // Toggle: if already showing for this pro, hide
+            if (btn.classList.contains('active')) {
+                btn.classList.remove('active');
+                resultDiv.innerHTML = '';
+                return;
+            }
+
+            // Deactivate all buttons
+            container.querySelectorAll('[data-action="view-pro-matches"]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Show loading
+            resultDiv.innerHTML = `
+                <div class="pro-matches-loading">
+                    <div class="spinner" style="width:24px;height:24px;border-width:2px;margin:0 auto 8px;"></div>
+                    <p class="state-text" style="font-size:0.85rem;">查询与 ${escapeHtml(proName)} 的比赛记录...</p>
+                </div>
+            `;
+
+            try {
+                const matches = await getMatchesWithPlayer(myId, proId);
+                if (!Array.isArray(matches) || matches.length === 0) {
+                    resultDiv.innerHTML = `
+                        <div class="state-empty" style="padding:20px;">
+                            <p class="state-text" style="font-size:0.85rem;">未找到与 ${escapeHtml(proName)} 的加速模式比赛</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                resultDiv.innerHTML = `
+                    <div class="pro-matches-section">
+                        <h4 class="pro-matches-title">与 ${escapeHtml(proName)} 的 ${matches.length} 场比赛</h4>
+                        <div class="modal-table-wrapper">
+                            <table class="data-table pro-matches-table">
+                                <thead>
+                                    <tr>
+                                        <th>比赛ID</th>
+                                        <th>时间</th>
+                                        <th>时长</th>
+                                        <th>结果</th>
+                                        <th>链接</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${matches.map(m => renderProMatchRow(m)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                console.error('[ui] Failed to load pro matches:', err);
+                resultDiv.innerHTML = `
+                    <div class="state-error" style="padding:20px;">
+                        <p class="state-text" style="font-size:0.85rem;">加载失败: ${escapeHtml(err.message || '网络错误')}</p>
+                    </div>
+                `;
+            }
+        });
+    });
+}
+
+/**
+ * Render a single match row for the pro matches sub-table.
+ */
+function renderProMatchRow(match) {
+    const matchId = match.match_id;
+    const odUrl = `https://www.opendota.com/matches/${matchId}`;
+    const dbUrl = `https://www.dotabuff.com/matches/${matchId}`;
+    const date = new Date(match.start_time * 1000);
+    const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    const duration = match.duration ? `${Math.floor(match.duration / 60)}:${String(match.duration % 60).padStart(2, '0')}` : '-';
+    const isWin = match.player_slot != null && match.radiant_win != null
+        ? (match.player_slot < 128) === match.radiant_win
+        : null;
+    const resultHtml = isWin === null ? '-' :
+        `<span class="result-badge ${isWin ? 'badge-win' : 'badge-loss'}">${isWin ? '胜' : '负'}</span>`;
+    const k = match.kills || 0;
+    const d = match.deaths || 0;
+    const a = match.assists || 0;
+
+    return `
+        <tr class="pro-match-row">
+            <td><code>${matchId}</code></td>
+            <td>${timeStr}</td>
+            <td>${duration}</td>
+            <td>${resultHtml} <span style="font-size:0.75rem;color:var(--text-muted)">${k}/${d}/${a}</span></td>
+            <td>
+                <a href="${odUrl}" target="_blank" rel="noopener" title="OpenDota">OD</a>
+                <a href="${dbUrl}" target="_blank" rel="noopener" title="Dotabuff" class="db-link">DB</a>
+            </td>
+        </tr>
+    `;
 }
 
 /**

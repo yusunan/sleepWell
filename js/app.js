@@ -194,7 +194,7 @@ async function openPros() {
     try {
         showModalLoading();
         const pros = await getPlayerPros(state.playerList.myId);
-        renderProsModal(Array.isArray(pros) ? pros : []);
+        renderProsModal(Array.isArray(pros) ? pros : [], state.playerList.myId);
     } catch (err) {
         console.error('[睡了么] Pros error:', err);
         showModalAlert('加载与神同行数据失败: ' + (err.message || '未知错误'));
