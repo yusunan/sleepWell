@@ -1875,6 +1875,12 @@ a:hover {
     border: 1px solid rgba(156, 39, 176, 0.3);
 }
 
+.tag-lucky {
+    background: rgba(255, 215, 0, 0.15);
+    color: #ffd700;
+    border: 1px solid rgba(255, 215, 0, 0.4);
+}
+
 /* Match win/loss count */
 .match-wl.win {
     color: var(--color-win);

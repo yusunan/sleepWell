@@ -661,13 +661,18 @@ function renderPeerRow(peer) {
 
     // Labels based on teammate and opponent win rates
     let label = '';
-    if (withGames >= 3) {
-        if (parseFloat(withWR) >= 60) label += '<span class="peer-tag tag-bro">🤝 好基友</span>';
-        else if (parseFloat(withWR) < 40) label += '<span class="peer-tag tag-pig">🐷 猪队友</span>';
-    }
-    if (againstGames >= 3) {
-        if (parseFloat(againstWR) >= 60) label += '<span class="peer-tag tag-beast">🐶 铁畜生</span>';
-        else if (parseFloat(againstWR) < 40) label += '<span class="peer-tag tag-nemesis">💀 真克星</span>';
+    const isBro = withGames >= 3 && parseFloat(withWR) >= 60;
+    const isBeast = againstGames >= 3 && parseFloat(againstWR) >= 60;
+
+    // When both "好基友" and "铁畜生" apply, it means this player is a lucky charm:
+    // you win with them on your team AND you win against them on the enemy team.
+    if (isBro && isBeast) {
+        label += '<span class="peer-tag tag-lucky">🌟 真福星</span>';
+    } else {
+        if (isBro) label += '<span class="peer-tag tag-bro">🤝 好基友</span>';
+        else if (withGames >= 3 && parseFloat(withWR) < 40) label += '<span class="peer-tag tag-pig">🐷 猪队友</span>';
+        if (isBeast) label += '<span class="peer-tag tag-beast">🐶 铁畜生</span>';
+        else if (againstGames >= 3 && parseFloat(againstWR) < 40) label += '<span class="peer-tag tag-nemesis">💀 真克星</span>';
     }
 
     const lastPlayed = peer.last_played
