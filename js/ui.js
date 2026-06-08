@@ -208,9 +208,15 @@ export let peersTableSort = { field: 'games', asc: false };
 let lastMatchesData = null;
 let lastMatchesHeroMap = null;
 let lastPeersData = null;
+let lastHeroesData = null;
+let lastHeroesHeroMap = null;
 export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
     const container = $(containerId);
     if (!container) return;
+
+    // Store data for re-sort
+    lastHeroesData = heroes;
+    lastHeroesHeroMap = heroMap;
 
     if (!heroes || heroes.length === 0) {
         showEmpty(containerId, '暂无加速模式英雄数据');
@@ -274,7 +280,11 @@ export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
                 heroTableSort.field = field;
                 heroTableSort.asc = false;
             }
-            if (onSortChange) onSortChange();
+            if (onSortChange) {
+                onSortChange();
+            } else if (lastHeroesData && lastHeroesHeroMap) {
+                renderHeroTable(containerId, lastHeroesData, lastHeroesHeroMap, onSortChange);
+            }
         });
     });
 

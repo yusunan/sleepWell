@@ -30,7 +30,8 @@ const HERO_NAMES_ZH = {
     lina: '莉娜',
     lion: '莱恩',
     shadow_shaman: '暗影萨满',
-    slardar: '斯拉达',
+    slardar: '大鱼人',
+    slark: '小鱼人',
     tidehunter: '潮汐猎人',
     witch_doctor: '巫医',
     lich: '巫妖',
@@ -122,8 +123,14 @@ const HERO_NAMES_ZH = {
     muerta: '琼英碧灵',
     ringmaster: '百戏大王',
     kez: '凯',
-    primal_beast: '兽王',
+    primal_beast: '兽',
     marci: '玛西',
+    queenofpain: '痛苦女王',
+    beastmaster: '兽王',
+    undying: '不朽尸王',
+    keeper_of_the_light: '光之守卫',
+    skywrath_mage: '天怒法师',
+    largo: '朗歌',
 };
 
 /**
