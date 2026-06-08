@@ -2,7 +2,7 @@
 // ui.js — DOM Rendering Functions
 // ============================================================
 
-import { RANK_MEDALS, LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
+import { LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
 import { getMatchesWithPlayer } from './api.js';
 
 // --- Tiny DOM Builder ---
@@ -108,23 +108,60 @@ export function showDashboard(visible = true) {
 
 // --- Player Profile ---
 
+/**
+ * Parse OpenDota rank_tier into medal name, tier number, and star count.
+ * rank_tier format: tens digit = medal, ones digit = star.
+ * e.g. 11-15 = Herald I-V, 21-25 = Guardian I-V, 80 = Immortal.
+ */
+function parseRankTier(rankTier) {
+    if (!rankTier || rankTier < 10) return null;
+    const tier = Math.floor(rankTier / 10);   // 1=Herald ... 8=Immortal
+    const star = rankTier % 10;                // 1-5 or 0 for Immortal
+
+    const TIERS = {
+        1: '先锋', 2: '卫士', 3: '中军', 4: '统帅',
+        5: '传奇', 6: '万古', 7: '超凡', 8: '冠绝',
+    };
+
+    const zh = TIERS[tier];
+    if (!zh) return null;
+
+    const starNumeral = ['', 'I', 'II', 'III', 'IV', 'V'];
+    const name = tier === 8 ? zh : `${zh} ${starNumeral[star] || star}`;
+
+    return { name, tier, star };
+}
+
 export function renderPlayerProfile(containerId, profile) {
     const container = $(containerId);
     if (!container) return;
 
-    const avatarUrl = profile.profile?.avatarfull || profile.profile?.avatarmedium || '';
     const personaName = profile.profile?.personaname || '匿名玩家';
     const steamId = profile.profile?.account_id || '';
     const profileUrl = profile.profile?.profileurl || `https://steamcommunity.com/profiles/${steamId}`;
 
-    // Rank badge — display raw rank_tier value
     const rankTier = profile.rank_tier || 0;
-    const rankName = rankTier > 0 ? String(rankTier) : '未校准';
+    const rank = parseRankTier(rankTier);
 
-    // Rank icon image
-    const rankIcon = rankTier > 0
-        ? `https://www.opendota.com/assets/images/dota2/rank_icons/rank_icon_${rankTier}.png`
-        : null;
+    const rankHtml = rank ? `
+        <div class="profile-rank">
+            <div class="rank-badge">
+                <img src="https://www.opendota.com/assets/images/dota2/rank_icons/rank_icon_${rank.tier}.png"
+                     alt="${escapeHtml(rank.name)}" class="rank-medal"
+                     onerror="this.style.display='none'">
+                ${rank.tier !== 8 && rank.star > 0 ? `
+                <img src="https://www.opendota.com/assets/images/dota2/rank_icons/rank_star_${rank.star}.png"
+                     alt="★${rank.star}" class="rank-star"
+                     onerror="this.style.display='none'">
+                ` : ''}
+            </div>
+            <span class="rank-name">${escapeHtml(rank.name)}</span>
+        </div>
+    ` : `
+        <div class="profile-rank">
+            <span class="rank-name">未校准</span>
+        </div>
+    `;
 
     container.innerHTML = `
         <div class="player-profile">
@@ -138,9 +175,7 @@ export function renderPlayerProfile(containerId, profile) {
                     <a href="${profileUrl}" target="_blank" rel="noopener" class="profile-link">Steam 资料 →</a>
                 </div>
             </div>
-            <div class="profile-rank">
-                <span class="rank-name">${rankTier}</span>
-            </div>
+            ${rankHtml}
         </div>
     `;
 }
@@ -165,19 +200,15 @@ export function renderTurboSummary(containerId, stats) {
         direWR = 0,
         coreGames = 0,
         supportGames = 0,
-        computedMmrTurbo = null,
     } = stats;
 
     const kda = avgDeaths > 0
         ? ((avgKills + avgAssists) / avgDeaths).toFixed(1)
         : (avgKills + avgAssists).toFixed(1);
 
-    const mmrValue = computedMmrTurbo != null ? Math.round(computedMmrTurbo).toLocaleString() : '未校准';
-
     const cards = [
         { icon: '🎮', label: '加速模式场次', value: totalGames.toLocaleString(), color: '' },
         { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'win' : 'loss' },
-        { icon: '📊', label: '隐藏分(加速)', value: mmrValue, color: '' },
         { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
         { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
@@ -910,7 +941,6 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
         direWR: turboStats.direWR || 0,
         coreGames: turboStats.coreGames || 0,
         supportGames: turboStats.supportGames || 0,
-        computedMmrTurbo: turboStats.computedMmrTurbo ?? null,
     });
 
     // Hero table
@@ -956,12 +986,6 @@ export function renderChartCanvases() {
                 <h3 class="chart-title">英雄表现</h3>
                 <div class="chart-container">
                     <canvas id="hero-perf-chart"></canvas>
-                </div>
-            </div>
-            <div class="chart-card chart-card-full">
-                <h3 class="chart-title">隐藏分趋势</h3>
-                <div class="chart-container">
-                    <canvas id="mmr-trend-chart"></canvas>
                 </div>
             </div>
         </div>
@@ -1120,7 +1144,6 @@ export function renderPlayerList(containerId, playerList, callbacks) {
                 </div>
                 <div class="collapsible-body open" id="collapse-advanced">
                     <div class="advanced-buttons">
-                        <button class="btn btn-sm btn-advanced" data-action="open-leaderboard">🌟 琅琊榜</button>
                         <button class="btn btn-sm btn-advanced" data-action="open-pros">👑 与神同行</button>
                     </div>
                 </div>
@@ -1223,9 +1246,6 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         }
 
         // Advanced features
-        if (action === 'open-leaderboard' && callbacks.onOpenLeaderboard) {
-            callbacks.onOpenLeaderboard();
-        }
         if (action === 'open-pros' && callbacks.onOpenPros) {
             callbacks.onOpenPros();
         }

@@ -14,7 +14,6 @@ import {
     getTurboCounts,
     fetchTurboStats,
     getPeers,
-    getTopPlayers,
     getPlayerPros,
     getRateLimitStatus,
     cancelAll,
@@ -47,14 +46,12 @@ import {
     setTeammateHighlight,
     closeModal,
     showModalLoading,
-    renderLeaderboardModal,
     renderProsModal,
     showModalAlert,
 } from './ui.js';
 import {
     createWinRateTrend,
     createHeroPerformanceChart,
-    createMmrTrendChart,
     destroyChart,
 } from './charts.js';
 
@@ -165,7 +162,6 @@ function getListCallbacks() {
         onAddTeammate: (id, note) => addTeammateId(id, note),
         onRemoveTeammate: (id) => removeTeammateId(id),
         onRefresh: () => refreshCurrentPlayer(),
-        onOpenLeaderboard: () => openLeaderboard(),
         onOpenPros: () => openPros(),
     };
 }
@@ -173,18 +169,6 @@ function switchToMyPlayer() { if (state.isLoading || !state.playerList.myId) ret
 function switchToEnemy(id) { if (state.isLoading) return; state.isEnemy = true; state.isTeammate = false; document.getElementById('search-input').value = id; loadDashboard(String(id), true, false); }
 function switchToTeammate(id) { if (state.isLoading) return; state.isEnemy = false; state.isTeammate = true; document.getElementById('search-input').value = id; loadDashboard(String(id), false, true); }
 function refreshCurrentPlayer() { if (state.isLoading) return; if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
-
-async function openLeaderboard() {
-    try {
-        showModalLoading();
-        const data = await getTopPlayers();
-        const players = data?.players || (Array.isArray(data) ? data : []);
-        renderLeaderboardModal(players);
-    } catch (err) {
-        console.error('[睡了么] Leaderboard error:', err);
-        showModalAlert('加载琅琊榜失败: ' + (err.message || '未知错误'));
-    }
-}
 
 async function openPros() {
     if (!state.playerList.myId) {
@@ -297,10 +281,6 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
         }
         state.profile = profile; state.turboCounts = turboCounts; state.turboStats = turboStats;
         state.allRecentMatches = recentMatches || [];
-        // Only save MMR history for the main player, not enemies/teammates
-        if (!isEnemy && !isTeammate && accountId === state.playerList.myId) {
-            saveMmrHistory(accountId, profile?.computed_mmr_turbo ?? null);
-        }
         updateRateLimitDisplay();
 
         // Extract patches
@@ -320,7 +300,6 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
 
         // Compute summary from counts + totals
         const computedStats = computeSummaryFromData(turboCounts, turboStats, turboMatches);
-        computedStats.computedMmrTurbo = profile?.computed_mmr_turbo ?? null;
         state.sleepEval = evaluateSleep(state.allRecentMatches, state.heroMap);
 
         // Render
@@ -376,7 +355,6 @@ async function onPatchChange(accountId, isEnemy, patch) {
         const turboStats = await fetchTurboStats(accountId, patch);
         state.turboStats = turboStats;
         const computedStats = computeSummaryFromData(state.turboCounts, turboStats, state.turboMatches);
-        computedStats.computedMmrTurbo = state.profile?.computed_mmr_turbo ?? null;
         state.turboStats = turboStats;
         renderTurboSummary('summary-section', computedStats);
         renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null);
@@ -469,53 +447,6 @@ function createCharts(stats, matches) {
     if (tc && matches.length > 0) { const c = createWinRateTrend(tc, matches); if (c) state.charts.winRateTrend = c; }
     const hc = document.getElementById('hero-perf-chart');
     if (hc && stats.heroes?.length > 0) { const c = createHeroPerformanceChart(hc, stats.heroes, state.heroMap); if (c) state.charts.heroPerformance = c; }
-    const mc = document.getElementById('mmr-trend-chart');
-    if (mc && state.currentViewId) {
-        const mmrHistory = getMmrHistory(state.currentViewId);
-        if (mmrHistory.length >= 1) {
-            const c = createMmrTrendChart(mc, mmrHistory);
-            if (c) state.charts.mmrTrend = c;
-        }
-    }
-}
-
-// --- MMR History ---
-
-/**
- * Save an MMR data point to localStorage.
- * Only saves if the value is new (different from last entry).
- * @param {string} accountId
- * @param {number|null} mmr
- */
-function saveMmrHistory(accountId, mmr) {
-    if (mmr == null) return;
-    const history = getMmrHistory(accountId);
-    const last = history[history.length - 1];
-    // Deduplicate: skip if same as last entry
-    if (last && last.mmr === mmr) return;
-    history.push({ ts: Date.now(), mmr });
-    // Keep at most 200 entries per player
-    if (history.length > 200) history.splice(0, history.length - 200);
-    try {
-        localStorage.setItem(STORAGE_KEYS.MMR_HISTORY_PREFIX + accountId, JSON.stringify(history));
-    } catch { /* ignore quota */ }
-}
-
-/**
- * Retrieve MMR history for a player.
- * @param {string} accountId
- * @returns {Array<{ts: number, mmr: number}>}
- */
-function getMmrHistory(accountId) {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.MMR_HISTORY_PREFIX + accountId);
-        if (!raw) return [];
-        const arr = JSON.parse(raw);
-        if (!Array.isArray(arr)) return [];
-        // Filter out bad entries and sort by timestamp
-        return arr.filter(e => e && typeof e.ts === 'number' && typeof e.mmr === 'number')
-                  .sort((a, b) => a.ts - b.ts);
-    } catch { return []; }
 }
 
 // --- URL Hash ---

@@ -15,12 +15,14 @@ This is the ONLY correct way to filter Turbo mode data. Critical findings:
 - `game_mode=23` without `significant=0` returns empty data from most endpoints.
 - `game_mode=23&significant=0` — the magic combination that works for `/counts`, `/totals`, `/wl`, `/heroes`.
 - `/recentMatches` correctly labels Turbo as `game_mode=23`, works without `significant=0`.
+- `/players/{id}/matches?game_mode=23&significant=0&included_account_id={proId}` — find matches with a specific player.
 
 ### Data Sources
 
 | Endpoint | What it provides | Parameters |
 |----------|-----------------|------------|
-| `recentMatches` | 20 recent matches with full details (KDA/GPM/XPM) | none needed |
+| `recentMatches` | 20 recent matches with full details (KDA/GPM/XPM) | `game_mode=23&significant=0` |
+| `matches` | Full match history with another player | `game_mode=23&significant=0&included_account_id=X` |
 | `counts` | Game counts by patch/lane_role/region/is_radiant | `game_mode=23&significant=0` |
 | `totals` | Aggregated KDA/GPM/XPM/last_hits/etc | `game_mode=23&significant=0` |
 | `wl` | Win/loss counts | `game_mode=23&significant=0` |
@@ -36,6 +38,7 @@ This is the ONLY correct way to filter Turbo mode data. Critical findings:
 - Before 02:00 today → use yesterday's 02:00 as end
 - After 02:00 today → use today's 02:00 as end
 - Score: time 50% + win 25% + KDA 25%
+- KDA score: monotonic increasing (KDA越高越牛逼). <1=30, 1-10 linear 50→100, ≥10=100
 - Real-time advice: only shown when current time is 20:00-02:00
 
 ## File Structure
@@ -51,19 +54,21 @@ dd2/
 │   ├── config.js       # API_BASE, STORAGE_KEYS, PATCH_VERSIONS, RANK_MEDALS, CACHE_VERSION
 │   ├── storage.js      # localStorage with TTL, namespace 'dd2_'
 │   ├── api.js          # OpenDota client: request(), getHeroes(), getPlayer(),
-│   │                   #   getRecentMatches(), getTurboCounts(), getTurboTotals(),
+│   │                   #   getRecentMatches(), getMatchesWithPlayer(),
+│   │                   #   getTurboCounts(), getTurboTotals(),
 │   │                   #   getTurboWinLoss(), getTurboHeroStats(), fetchTurboStats(),
 │   │                   #   getPeers(), getTopPlayers(), getPlayerPros()
 │   ├── heroNames.js    # Chinese hero name mapping (internal_name → 中文)
 │   ├── sleep.js        # evaluateSleep(), getSleepMessage(), getCurrentSessionAdvice(),
 │   │                   #   isPlayerInactive()
-│   ├── charts.js       # createWinRateTrend(), createHeroPerformanceChart()
+│   ├── charts.js       # createWinRateTrend(), createHeroPerformanceChart(),
+│   │                   #   createMmrTrendChart()
 │   ├── ui.js           # All DOM rendering: renderPlayerList, renderSleepCard,
 │   │                   #   renderSessionAdvice, renderTeammateInactiveCard,
 │   │                   #   renderTurboSummary, renderHeroTable, renderRecentMatches,
 │   │                   #   renderPeersTable, renderPatchSelector, renderPlayerProfile,
-│   │                   #   renderLeaderboardModal, renderProsModal, showModalLoading,
-│   │                   #   showLoading, showError, showEmpty, closeModal
+│   │                   #   renderLeaderboardModal, renderProsModal, renderProMatchRow,
+│   │                   #   showModalLoading, showLoading, showError, showEmpty, closeModal
 │   └── app.js          # Main controller: init(), loadDashboard(), player management,
 │                       #   patch filter, data computation, loadPeers(),
 │                       #   openLeaderboard(), openPros()
@@ -91,6 +96,7 @@ dd2/
 - `CACHE_VERSION` in config.js — bump to clear stale API caches on load
 - Player list (`dd2_player_list`) and `dd2_cache_version` are preserved across cache clears
 - Hero list cached 7 days, player stats 5 minutes, peers/pros 5 minutes
+- MMR history (`dd2_mmr_history_{id}`) is **permanent**, preserved across cache clears, only saved for the main player (not enemies/teammates)
 
 ### localStorage Keys
 
@@ -111,18 +117,17 @@ dd2/
 | `dd2_stats_{id}_turbo_totals_p{ver}` | Aggregated KDA/GPM/XPM (patch) | 5 min |
 | `dd2_stats_{id}_turbo_peers` | Frequent peers (90 days) | 5 min |
 | `dd2_stats_{id}_pros` | Pro players encountered | 5 min |
+| `dd2_mmr_history_{id}` | MMR history `[{ts, mmr}, ...]` | Permanent |
 
 ### Version Update Detection
 
 Three-layer cache-busting strategy:
 1. **`_headers`**: Cloudflare Pages sets `no-cache, no-store, must-revalidate` on `index.html` and `version.txt`
-2. **Inline version check**: Synchronous XHR in `index.html` fetches `/version.txt`, compares with `dd2_app_version` in localStorage. If mismatch → clear all `dd2_*` caches (except `player_list`) → `location.reload(true)`
-3. **Asset version strings**: CSS/JS imports use `?v=N` query param matching `version.txt`
+2. **Inline version check**: Async XHR in `index.html` fetches `/version.txt` (timestamp), compares with `dd2_app_ts` in localStorage. If mismatch → clear all `dd2_*` caches (except `player_list` and `mmr_history_*`) → `location.reload(true)`
+3. **No `?v=` query strings on assets**: Removed for UC Browser compatibility; `_headers` controls JS/CSS caching with `max-age=3600`
 
-When deploying an update, bump these three numbers in sync:
-- `version.txt` → N+1
-- `js/config.js` → `CACHE_VERSION = N+1`
-- `index.html` → `?v=N+1` (CSS and JS imports, two places)
+When deploying an update, run one command:
+- `date +%s > version.txt` (or set Cloudflare Pages build command to do this automatically)
 
 ## CSS Layout
 
@@ -132,7 +137,13 @@ When deploying an update, bump these three numbers in sync:
 - Match table hides duration/link columns on tablet, K/D/A on phone
 - Peers table hides against columns on tablet, with columns on phone
 - Leaderboard/pros modals: full-screen bottom sheet on mobile; MMR column visible, last-match hidden on phone
+- Pros modal: "比赛" button per row uses event delegation on `.modal-body` for mobile compatibility; clicking fetches matches via `getMatchesWithPlayer()`, renders sub-table with OD/DB links
 - Sidebar sections use collapsible sections with CSS `max-height` transition
+- MMR trend chart: full-width (`grid-column: 1 / -1`) below win-rate and hero performance charts
+
+## Hero Name Mapping
+
+`heroNames.js` maps Dota 2 internal names to Chinese. Internal names are the `hero.name` from `/heroes` API with `npc_dota_hero_` prefix stripped (e.g., `slark`, `queenofpain`, `keeper_of_the_light`). **Keys must be lowercase snake_case** (not PascalCase) — otherwise `enrichHeroMapWithChinese()` won't match and heroes will show English names.
 
 ## Build/Deploy
 

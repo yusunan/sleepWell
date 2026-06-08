@@ -373,6 +373,31 @@ a:hover {
     flex-shrink: 0;
 }
 
+.rank-badge {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+}
+
+.rank-medal {
+    width: 64px;
+    height: 64px;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.rank-star {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 32px;
+    z-index: 1;
+}
+
 .rank-icon {
     width: 48px;
     height: 48px;
@@ -881,6 +906,22 @@ a:hover {
 
     .profile-rank .rank-name {
         font-size: 0.85rem;
+    }
+
+    .rank-badge {
+        width: 48px;
+        height: 48px;
+    }
+
+    .rank-medal {
+        width: 48px;
+        height: 48px;
+    }
+
+    .rank-star {
+        width: 24px;
+        height: 24px;
+        top: -6px;
     }
 
     /* Sleep card */
