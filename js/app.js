@@ -297,7 +297,10 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
         }
         state.profile = profile; state.turboCounts = turboCounts; state.turboStats = turboStats;
         state.allRecentMatches = recentMatches || [];
-        saveMmrHistory(accountId, profile?.computed_mmr_turbo ?? null);
+        // Only save MMR history for the main player, not enemies/teammates
+        if (!isEnemy && !isTeammate && accountId === state.playerList.myId) {
+            saveMmrHistory(accountId, profile?.computed_mmr_turbo ?? null);
+        }
         updateRateLimitDisplay();
 
         // Extract patches
