@@ -383,6 +383,7 @@ function computeSummaryFromData(counts, turboStats, matches) {
     // Fallback: compute from recent matches if totals missing
     let avgKills = avg('kills'), avgDeaths = avg('deaths'), avgAssists = avg('assists');
     let avgGpm = avg('gold_per_min'), avgXpm = avg('xp_per_min');
+    let avgLastHits = avg('last_hits'), avgHeroDamage = avg('hero_damage');
     if (avgGpm === 0 && matches.length > 0) {
         let sK = 0, sD = 0, sA = 0, sG = 0, sX = 0;
         for (const m of matches) { sK += m.kills||0; sD += m.deaths||0; sA += m.assists||0; sG += m.gold_per_min||0; sX += m.xp_per_min||0; }
@@ -404,6 +405,7 @@ function computeSummaryFromData(counts, turboStats, matches) {
         totalGames, wins, losses,
         winRate: totalGames > 0 ? (wins / totalGames * 100) : 0,
         avgKills, avgDeaths, avgAssists, avgGpm, avgXpm,
+        avgLastHits, avgHeroDamage,
         maxStreak: calculateMaxWinStreak(matches),
         radiantWR, direWR, coreGames, supportGames,
         heroes: computeHeroesFromData(heroes, matches),

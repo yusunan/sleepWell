@@ -196,6 +196,8 @@ export function renderTurboSummary(containerId, stats) {
         avgXpm = 0,
         radiantWR = 0,
         direWR = 0,
+        avgLastHits = 0,
+        avgHeroDamage = 0,
     } = stats;
 
     const kda = avgDeaths > 0
@@ -210,6 +212,8 @@ export function renderTurboSummary(containerId, stats) {
         { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
         { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
+        { icon: '👊', label: '场均正补', value: Math.round(avgLastHits).toLocaleString(), color: '' },
+        { icon: '💥', label: '场均英雄伤害', value: (avgHeroDamage / 1000).toFixed(1) + 'K', color: '' },
     ];
 
     container.innerHTML = `
@@ -936,6 +940,8 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
         direWR: turboStats.direWR || 0,
         coreGames: turboStats.coreGames || 0,
         supportGames: turboStats.supportGames || 0,
+        avgLastHits: turboStats.avgLastHits || 0,
+        avgHeroDamage: turboStats.avgHeroDamage || 0,
     });
 
     // Hero table
