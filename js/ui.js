@@ -346,7 +346,7 @@ function renderHeroRow(hero, heroMap) {
     const games = hero.games || 0;
     const wins = hero.win || 0;
     const wr = games > 0 ? ((wins / games) * 100).toFixed(1) : '0.0';
-    const wrClass = parseFloat(wr) >= 55 ? 'wr-good' : parseFloat(wr) >= 45 ? 'wr-avg' : 'wr-bad';
+    const wrClass = parseFloat(wr) === 0 ? 'wr-none' : parseFloat(wr) >= 50 ? 'wr-good' : parseFloat(wr) >= 45 ? 'wr-avg' : 'wr-bad';
 
     return `
         <tr class="hero-row" data-hero-id="${hero.hero_id}">
@@ -1685,7 +1685,7 @@ export async function renderMetaHeroesModal(heroMap) {
             const iconUrl = hm?.name
                 ? `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hm.name}.png`
                 : '';
-            const wrClass = h.wr >= 53 ? 'wr-good' : h.wr >= 50 ? 'wr-avg' : 'wr-bad';
+            const wrClass = h.wr === 0 ? 'wr-none' : h.wr >= 50 ? 'wr-good' : h.wr >= 45 ? 'wr-avg' : 'wr-bad';
 
             return `
                 <tr class="meta-hero-row">

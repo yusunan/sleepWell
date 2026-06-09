@@ -645,8 +645,9 @@ a:hover {
 }
 
 .wr-good { color: var(--color-win); }
-.wr-avg { color: var(--text-secondary); }
+.wr-avg { color: #ffc107; }
 .wr-bad { color: var(--color-loss); }
+.wr-none { color: var(--text-muted); }
 
 .hero-count,
 .match-count {

@@ -168,16 +168,18 @@ export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 
         h.games > 0 ? parseFloat((h.win / h.games * 100).toFixed(1)) : 0
     );
 
-    // Color bars by win rate
+    // Color bars by win rate: green ≥50%, yellow 45-50%, red <45%, gray for 0%
     const colors = winRates.map(wr => {
-        if (wr >= 55) return 'rgba(76, 175, 80, 0.8)';
-        if (wr >= 45) return 'rgba(158, 158, 158, 0.6)';
+        if (wr === 0) return 'rgba(158, 158, 158, 0.5)';
+        if (wr >= 50) return 'rgba(76, 175, 80, 0.8)';
+        if (wr >= 45) return 'rgba(255, 193, 7, 0.6)';
         return 'rgba(244, 67, 54, 0.7)';
     });
 
     const borders = winRates.map(wr => {
-        if (wr >= 55) return '#4caf50';
-        if (wr >= 45) return '#9e9e9e';
+        if (wr === 0) return '#9e9e9e';
+        if (wr >= 50) return '#4caf50';
+        if (wr >= 45) return '#ffc107';
         return '#f44336';
     });
 
