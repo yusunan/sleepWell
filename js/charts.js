@@ -144,33 +144,35 @@ export function createWinRateTrend(canvas, matches) {
  * Create a hero performance horizontal bar chart.
  *
  * @param {HTMLCanvasElement} canvas - The canvas element
- * @param {Array} heroes - Array of hero stat objects (from merged hero stats)
+ * @param {Array} heroes - Array of hero stat objects, sorted by games desc
  * @param {Map} heroMap - Map of hero_id → { localized_name, name }
- * @param {number} [maxHeroes=12] - Maximum number of heroes to display
+ * @param {number} [maxHeroes=10] - Maximum number of heroes to display
  * @returns {Chart} Chart.js instance
  */
-export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 12) {
+export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 10) {
     if (!window.Chart) {
         console.warn('Chart.js not loaded');
         return null;
     }
 
-    const topHeroes = heroes.slice(0, maxHeroes).reverse(); // Reverse for horizontal bar (bottom to top)
+    // Take top N by games (already sorted desc), reverse for bottom-to-top display
+    const topHeroes = heroes.slice(0, maxHeroes).reverse();
 
     const labels = topHeroes.map(h => {
         const name = heroMap.get(h.hero_id);
         return name ? name.localized_name : `Hero ${h.hero_id}`;
     });
 
+    const gameCounts = topHeroes.map(h => h.games || 0);
     const winRates = topHeroes.map(h =>
         h.games > 0 ? parseFloat((h.win / h.games * 100).toFixed(1)) : 0
     );
 
-    // Color based on win rate
+    // Color bars by win rate
     const colors = winRates.map(wr => {
-        if (wr >= 55) return 'rgba(76, 175, 80, 0.8)';   // green
-        if (wr >= 45) return 'rgba(158, 158, 158, 0.6)';  // gray
-        return 'rgba(244, 67, 54, 0.7)';                  // red
+        if (wr >= 55) return 'rgba(76, 175, 80, 0.8)';
+        if (wr >= 45) return 'rgba(158, 158, 158, 0.6)';
+        return 'rgba(244, 67, 54, 0.7)';
     });
 
     const borders = winRates.map(wr => {
@@ -184,8 +186,8 @@ export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 
         data: {
             labels,
             datasets: [{
-                label: '胜率 (%)',
-                data: winRates,
+                label: '场次',
+                data: gameCounts,
                 backgroundColor: colors,
                 borderColor: borders,
                 borderWidth: 1,
@@ -197,13 +199,10 @@ export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 
             indexAxis: 'y',
             scales: {
                 x: {
-                    min: 0,
-                    max: 100,
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         color: '#9098a8',
                         font: { size: 11 },
-                        callback: v => v + '%',
                     },
                 },
                 y: {
@@ -220,8 +219,10 @@ export function createHeroPerformanceChart(canvas, heroes, heroMap, maxHeroes = 
                     callbacks: {
                         label(ctx) {
                             const hero = topHeroes[ctx.dataIndex];
-                            const games = hero ? hero.games : 0;
-                            return [`胜率: ${ctx.parsed.x}%`, `场次: ${games}`];
+                            const wr = hero && hero.games > 0
+                                ? (hero.win / hero.games * 100).toFixed(1)
+                                : '0.0';
+                            return [`场次: ${ctx.parsed.x}`, `胜率: ${wr}%`];
                         },
                     },
                 },
