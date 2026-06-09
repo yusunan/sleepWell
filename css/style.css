@@ -2125,7 +2125,8 @@ a:hover {
    ============================================================ */
 
 .leaderboard-table,
-.pros-table {
+.pros-table,
+.meta-table {
     font-size: 0.875rem;
 }
 
@@ -2322,14 +2323,17 @@ a:hover {
     }
 
     .leaderboard-table,
-    .pros-table {
+    .pros-table,
+    .meta-table {
         font-size: 0.8rem;
     }
 
     .leaderboard-table th,
     .leaderboard-table td,
     .pros-table th,
-    .pros-table td {
+    .pros-table td,
+    .meta-table th,
+    .meta-table td {
         padding: 8px 10px;
     }
 }
@@ -2352,14 +2356,17 @@ a:hover {
     }
 
     .leaderboard-table,
-    .pros-table {
+    .pros-table,
+    .meta-table {
         font-size: 0.75rem;
     }
 
     .leaderboard-table th,
     .leaderboard-table td,
     .pros-table th,
-    .pros-table td {
+    .pros-table td,
+    .meta-table th,
+    .meta-table td {
         padding: 6px 8px;
     }
 

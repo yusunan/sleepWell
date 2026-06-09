@@ -46,6 +46,7 @@ import {
     setTeammateHighlight,
     closeModal,
     showModalLoading,
+    renderMetaHeroesModal,
     renderProsModal,
     showModalAlert,
 } from './ui.js';
@@ -162,6 +163,7 @@ function getListCallbacks() {
         onAddTeammate: (id, note) => addTeammateId(id, note),
         onRemoveTeammate: (id) => removeTeammateId(id),
         onRefresh: () => refreshCurrentPlayer(),
+        onOpenMeta: () => openMeta(),
         onOpenPros: () => openPros(),
     };
 }
@@ -169,6 +171,15 @@ function switchToMyPlayer() { if (state.isLoading || !state.playerList.myId) ret
 function switchToEnemy(id) { if (state.isLoading) return; state.isEnemy = true; state.isTeammate = false; document.getElementById('search-input').value = id; loadDashboard(String(id), true, false); }
 function switchToTeammate(id) { if (state.isLoading) return; state.isEnemy = false; state.isTeammate = true; document.getElementById('search-input').value = id; loadDashboard(String(id), false, true); }
 function refreshCurrentPlayer() { if (state.isLoading) return; if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
+
+async function openMeta() {
+    try {
+        await renderMetaHeroesModal(state.heroMap);
+    } catch (err) {
+        console.error('[睡了么] Meta heroes error:', err);
+        showModalAlert('加载版本答案失败: ' + (err.message || '未知错误'));
+    }
+}
 
 async function openPros() {
     if (!state.playerList.myId) {

@@ -3,7 +3,7 @@
 // ============================================================
 
 import { LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
-import { getMatchesWithPlayer } from './api.js';
+import { getMatchesWithPlayer, getHeroStats } from './api.js';
 
 // --- Tiny DOM Builder ---
 
@@ -188,8 +188,6 @@ export function renderTurboSummary(containerId, stats) {
 
     const {
         totalGames = 0,
-        wins = 0,
-        losses = 0,
         winRate = 0,
         avgKills = 0,
         avgDeaths = 0,
@@ -198,8 +196,6 @@ export function renderTurboSummary(containerId, stats) {
         avgXpm = 0,
         radiantWR = 0,
         direWR = 0,
-        coreGames = 0,
-        supportGames = 0,
     } = stats;
 
     const kda = avgDeaths > 0
@@ -208,13 +204,12 @@ export function renderTurboSummary(containerId, stats) {
 
     const cards = [
         { icon: '🎮', label: '加速模式场次', value: totalGames.toLocaleString(), color: '' },
+        { icon: '💰', label: '平均 GPM', value: Math.round(avgGpm).toLocaleString(), color: '' },
+        { icon: '⚡', label: '平均 XPM', value: Math.round(avgXpm).toLocaleString(), color: '' },
         { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'win' : 'loss' },
         { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
         { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
-        { icon: '💰', label: '平均 GPM', value: Math.round(avgGpm).toLocaleString(), color: '' },
-        { icon: '⚡', label: '平均 XPM', value: Math.round(avgXpm).toLocaleString(), color: '' },
-        { icon: '🎯', label: '核心/辅助比', value: supportGames > 0 ? (coreGames / supportGames).toFixed(0) + ':1' : '纯核心', color: '' },
     ];
 
     container.innerHTML = `
@@ -1144,6 +1139,7 @@ export function renderPlayerList(containerId, playerList, callbacks) {
                 </div>
                 <div class="collapsible-body open" id="collapse-advanced">
                     <div class="advanced-buttons">
+                        <button class="btn btn-sm btn-advanced" data-action="open-meta">📊 版本答案</button>
                         <button class="btn btn-sm btn-advanced" data-action="open-pros">👑 与神同行</button>
                     </div>
                 </div>
@@ -1246,6 +1242,9 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         }
 
         // Advanced features
+        if (action === 'open-meta' && callbacks.onOpenMeta) {
+            callbacks.onOpenMeta();
+        }
         if (action === 'open-pros' && callbacks.onOpenPros) {
             callbacks.onOpenPros();
         }
@@ -1627,6 +1626,112 @@ export function renderLeaderboardModal(players) {
         </div>
     `;
     bindModalEvents(container);
+}
+
+/**
+ * Render the pros modal (与神同行).
+ * @param {Array} pros - Array of pro player objects
+ * @param {string} [myId] - Current player's Steam32 ID (for match lookup)
+ */
+
+/**
+ * Render the meta heroes modal (版本答案).
+ * Fetches heroStats, computes Turbo win rates, shows top 20.
+ * @param {Map} heroMap - Map of hero_id → { name, localized_name, ... }
+ */
+export async function renderMetaHeroesModal(heroMap) {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    showModalLoading();
+
+    try {
+        const allHeroes = await getHeroStats();
+        if (!Array.isArray(allHeroes) || allHeroes.length === 0) {
+            showModalAlert('暂无英雄统计数据');
+            return;
+        }
+
+        // Calculate Turbo win rate, filter for minimum picks
+        const MIN_PICKS = 1000;
+        const heroes = allHeroes
+            .map(h => ({
+                id: h.id,
+                name: h.localized_name || `Hero ${h.id}`,
+                internal: (h.name || '').replace('npc_dota_hero_', ''),
+                picks: h.turbo_picks || 0,
+                wins: h.turbo_wins || 0,
+                wr: h.turbo_picks > 0 ? (h.turbo_wins / h.turbo_picks * 100) : 0,
+            }))
+            .filter(h => h.picks >= MIN_PICKS)
+            .sort((a, b) => b.wr - a.wr)
+            .slice(0, 20);
+
+        if (heroes.length === 0) {
+            showModalAlert('暂无符合条件的英雄数据');
+            return;
+        }
+
+        const rows = heroes.map((h, i) => {
+            // Look up Chinese name from heroMap
+            const hm = heroMap.get(h.id);
+            const displayName = hm?.localized_name || h.name;
+            const iconUrl = hm?.name
+                ? `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hm.name}.png`
+                : '';
+            const wrClass = h.wr >= 53 ? 'wr-good' : h.wr >= 50 ? 'wr-avg' : 'wr-bad';
+
+            return `
+                <tr class="meta-hero-row">
+                    <td class="col-rank">${i + 1}</td>
+                    <td class="col-hero">
+                        <div class="hero-cell">
+                            ${iconUrl ? `<img src="${iconUrl}" alt="${escapeHtml(displayName)}" class="hero-icon-sm" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>` : `<span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>`}
+                            <span>${escapeHtml(displayName)}</span>
+                        </div>
+                    </td>
+                    <td class="col-wr ${wrClass}">${h.wr.toFixed(1)}%</td>
+                    <td class="col-picks">${h.picks.toLocaleString()}</td>
+                    <td class="col-wins">${h.wins.toLocaleString()}</td>
+                </tr>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="modal-overlay" id="modal-overlay">
+                <div class="modal-card modal-meta">
+                    <div class="modal-header">
+                        <span class="modal-title">📊 版本答案 — 加速模式胜率 TOP 20</span>
+                        <button class="modal-close" data-action="close-modal">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="modal-table-wrapper">
+                            <table class="data-table meta-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-rank">#</th>
+                                        <th class="col-hero">英雄</th>
+                                        <th class="col-wr">胜率</th>
+                                        <th class="col-picks">出场</th>
+                                        <th class="col-wins">胜场</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="modal-count">仅统计出场 ≥ ${MIN_PICKS.toLocaleString()} 的英雄</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        bindModalEvents(container);
+
+    } catch (err) {
+        console.error('[ui] Failed to load hero stats:', err);
+        showModalAlert('加载版本答案失败: ' + (err.message || '网络错误'));
+    }
 }
 
 /**

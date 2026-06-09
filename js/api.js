@@ -197,6 +197,17 @@ export async function getHeroes() {
 }
 
 /**
+ * Fetch global hero stats (all game modes, includes turbo_picks/turbo_wins).
+ * Cached for 1 hour.
+ */
+export async function getHeroStats() {
+    return request('/heroStats', {}, {
+        cacheKey: 'dd2_hero_stats',
+        cacheTtl: 60 * 60 * 1000, // 1 hour
+    });
+}
+
+/**
  * Get player profile.
  */
 export async function getPlayer(accountId) {
