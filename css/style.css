@@ -1313,7 +1313,6 @@ a:hover {
     }
 
     .hero-cell span {
-        max-width: 75px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
