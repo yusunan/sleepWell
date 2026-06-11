@@ -1189,6 +1189,13 @@ a:hover {
         font-size: 0.7rem;
     }
 
+    /* Compact result column, expand hero name on mobile */
+    .matches-table .col-result {
+        width: 40px;
+    }
+    .matches-table .col-hero {
+        min-width: 70px;
+    }
     /* Keep rating column compact on mobile */
     .matches-table .col-rating {
         width: 36px;
@@ -1219,6 +1226,12 @@ a:hover {
         display: none;
     }
 
+    .matches-table .col-result {
+        width: 32px;
+    }
+    .matches-table .col-hero {
+        min-width: 64px;
+    }
     .matches-table .col-rating {
         width: 32px;
     }
