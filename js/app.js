@@ -15,6 +15,8 @@ import {
     fetchTurboStats,
     getPeers,
     getPlayerPros,
+    getHeroStats,
+    getTurboHeroStats,
     getRateLimitStatus,
     cancelAll,
     PlayerNotFoundError,
@@ -47,6 +49,7 @@ import {
     closeModal,
     showModalLoading,
     renderMetaHeroesModal,
+    renderRecommendModal,
     renderProsModal,
     showModalAlert,
 } from './ui.js';
@@ -165,6 +168,7 @@ function getListCallbacks() {
         onRefresh: () => refreshCurrentPlayer(),
         onOpenMeta: () => openMeta(),
         onOpenPros: () => openPros(),
+        onRecommend: () => openRecommend(),
     };
 }
 function switchToMyPlayer() { if (state.isLoading || !state.playerList.myId) return; state.isEnemy = false; state.isTeammate = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false, false); }
@@ -193,6 +197,103 @@ async function openPros() {
     } catch (err) {
         console.error('[睡了么] Pros error:', err);
         showModalAlert('加载与神同行数据失败: ' + (err.message || '未知错误'));
+    }
+}
+
+async function openRecommend() {
+    if (!state.playerList.myId) {
+        showModalAlert('请先在左侧「本人」区域设置您的 Steam32 ID');
+        return;
+    }
+    try {
+        showModalLoading();
+
+        // Fetch global hero stats and player's turbo hero stats in parallel
+        const [globalHeroes, playerHeroes] = await Promise.all([
+            getHeroStats(),
+            getTurboHeroStats(state.playerList.myId),
+        ]);
+
+        if (!Array.isArray(globalHeroes) || globalHeroes.length === 0) {
+            showModalAlert('暂无英雄统计数据');
+            return;
+        }
+
+        // Build player hero map: hero_id → { games, win, wr }
+        const playerMap = new Map();
+        if (Array.isArray(playerHeroes)) {
+            for (const ph of playerHeroes) {
+                playerMap.set(ph.hero_id, {
+                    games: ph.games || 0,
+                    win: ph.win || 0,
+                    wr: ph.games > 0 ? (ph.win / ph.games * 100) : 0,
+                });
+            }
+        }
+
+        // Compute global stats and composite scores
+        const MIN_GLOBAL_PICKS = 1000;
+        const MIN_PERSONAL_GAMES = 50;
+        const scored = [];
+
+        for (const gh of globalHeroes) {
+            const globalPicks = gh.turbo_picks || 0;
+            if (globalPicks < MIN_GLOBAL_PICKS) continue;
+
+            const globalWr = globalPicks > 0 ? (gh.turbo_wins / globalPicks * 100) : 0;
+            const playerData = playerMap.get(gh.id);
+            const personalGames = playerData ? playerData.games : 0;
+            const personalWr = playerData ? playerData.wr : 0;
+
+            // Ignore heroes the player has fewer than 50 games with
+            if (personalGames < MIN_PERSONAL_GAMES) continue;
+
+            // Composite score:
+            // - Player has extensive experience (> 200 games): personalWr 50% + globalWr 50%
+            // - Player has moderate experience (50-200 games): personalWr 30% + globalWr 70%
+            let score;
+            if (personalGames > 200) {
+                score = personalWr * 0.5 + globalWr * 0.5;
+            } else {
+                score = personalWr * 0.3 + globalWr * 0.7;
+            }
+
+            // Reason text
+            let reason;
+            if (personalGames > 200 && personalWr >= 50) {
+                reason = '您的绝活英雄，胜率表现出色，版本强势';
+            } else if (personalGames > 200) {
+                reason = '您的常用英雄，版本胜率高，值得继续练习';
+            } else if (personalWr >= 50) {
+                reason = '您使用过且胜率不错，当前版本表现强势';
+            } else {
+                reason = '您有使用经验，版本胜率高，有提升空间';
+            }
+
+            scored.push({
+                id: gh.id,
+                name: gh.localized_name || `Hero ${gh.id}`,
+                internal: (gh.name || '').replace('npc_dota_hero_', ''),
+                globalWr,
+                globalPicks,
+                personalGames,
+                personalWr: personalGames > 0 ? personalWr : 0,
+                score,
+                reason,
+            });
+        }
+
+        // Sort by composite score descending
+        scored.sort((a, b) => b.score - a.score);
+
+        // Take top 5
+        const recommendations = scored.slice(0, 5);
+
+        renderRecommendModal(state.heroMap, recommendations, state.playerList.myId);
+
+    } catch (err) {
+        console.error('[睡了么] Recommend error:', err);
+        showModalAlert('加载英雄推荐失败: ' + (err.message || '未知错误'));
     }
 }
 

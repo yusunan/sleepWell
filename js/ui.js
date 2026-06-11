@@ -4,6 +4,7 @@
 
 import { LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
 import { getMatchesWithPlayer, getHeroStats } from './api.js';
+import { createMetaTrendChart } from './charts.js';
 
 // --- Tiny DOM Builder ---
 
@@ -1147,6 +1148,7 @@ export function renderPlayerList(containerId, playerList, callbacks) {
                     <div class="advanced-buttons">
                         <button class="btn btn-sm btn-advanced" data-action="open-meta">📊 版本答案</button>
                         <button class="btn btn-sm btn-advanced" data-action="open-pros">👑 与神同行</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-recommend">🎯 英雄推荐</button>
                     </div>
                 </div>
             </div>
@@ -1253,6 +1255,9 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         }
         if (action === 'open-pros' && callbacks.onOpenPros) {
             callbacks.onOpenPros();
+        }
+        if (action === 'open-recommend' && callbacks.onRecommend) {
+            callbacks.onRecommend();
         }
     });
 
@@ -1658,6 +1663,9 @@ export async function renderMetaHeroesModal(heroMap) {
             return;
         }
 
+        // Calculate total turbo_picks across all heroes for pick rate
+        const totalPicks = allHeroes.reduce((sum, h) => sum + (h.turbo_picks || 0), 0);
+
         // Calculate Turbo win rate, filter for minimum picks
         const MIN_PICKS = 1000;
         const heroes = allHeroes
@@ -1668,76 +1676,267 @@ export async function renderMetaHeroesModal(heroMap) {
                 picks: h.turbo_picks || 0,
                 wins: h.turbo_wins || 0,
                 wr: h.turbo_picks > 0 ? (h.turbo_wins / h.turbo_picks * 100) : 0,
+                pickRate: totalPicks > 0 ? ((h.turbo_picks || 0) / totalPicks * 100) : 0,
+                picksTrend: h.turbo_picks_trend || [],
+                winsTrend: h.turbo_wins_trend || [],
             }))
-            .filter(h => h.picks >= MIN_PICKS)
-            .sort((a, b) => b.wr - a.wr)
-            .slice(0, 20);
+            .filter(h => h.picks >= MIN_PICKS);
 
         if (heroes.length === 0) {
             showModalAlert('暂无符合条件的英雄数据');
             return;
         }
 
-        const rows = heroes.map((h, i) => {
-            // Look up Chinese name from heroMap
-            const hm = heroMap.get(h.id);
-            const displayName = hm?.localized_name || h.name;
-            const iconUrl = hm?.name
-                ? `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hm.name}.png`
-                : '';
-            const wrClass = h.wr === 0 ? 'wr-none' : h.wr >= 50 ? 'wr-good' : h.wr >= 45 ? 'wr-avg' : 'wr-bad';
+        // Sort state
+        let sortKey = 'wr';
+        let sortDir = 'desc';
 
-            return `
-                <tr class="meta-hero-row">
-                    <td class="col-rank">${i + 1}</td>
-                    <td class="col-hero">
-                        <div class="hero-cell">
-                            ${iconUrl ? `<img src="${iconUrl}" alt="${escapeHtml(displayName)}" class="hero-icon-sm" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>` : `<span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>`}
-                            <span>${escapeHtml(displayName)}</span>
-                        </div>
-                    </td>
-                    <td class="col-wr ${wrClass}">${h.wr.toFixed(1)}%</td>
-                    <td class="col-picks">${h.picks.toLocaleString()}</td>
-                    <td class="col-wins">${h.wins.toLocaleString()}</td>
-                </tr>
-            `;
-        }).join('');
+        // Default sort by win rate desc
+        heroes.sort((a, b) => b.wr - a.wr);
+
+        // Selected hero for trend chart (default to first)
+        let selectedHeroId = heroes[0].id;
+
+        // Chart instance reference
+        let metaChart = null;
+
+        // Render table body rows
+        function renderRows(sortedHeroes, selId) {
+            return sortedHeroes.map((h, i) => {
+                const hm = heroMap.get(h.id);
+                const displayName = hm?.localized_name || h.name;
+                const iconUrl = hm?.name
+                    ? `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hm.name}.png`
+                    : '';
+                const wrClass = h.wr === 0 ? 'wr-none' : h.wr >= 50 ? 'wr-good' : h.wr >= 45 ? 'wr-avg' : 'wr-bad';
+                const selClass = h.id === selId ? ' selected' : '';
+
+                return `
+                    <tr class="meta-hero-row${selClass}" data-hero-id="${h.id}">
+                        <td class="col-rank">${i + 1}</td>
+                        <td class="col-hero">
+                            <div class="hero-cell">
+                                ${iconUrl ? `<img src="${iconUrl}" alt="${escapeHtml(displayName)}" class="hero-icon-sm" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>` : `<span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>`}
+                                <span>${escapeHtml(displayName)}</span>
+                            </div>
+                        </td>
+                        <td class="col-wr ${wrClass}">${h.wr.toFixed(1)}%</td>
+                        <td class="col-pickrate">${h.pickRate.toFixed(1)}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Get hero display name for chart
+        function getHeroDisplayName(heroId) {
+            const h = heroes.find(x => x.id === heroId);
+            if (!h) return '';
+            const hm = heroMap.get(h.id);
+            return hm?.localized_name || h.name;
+        }
+
+        // Draw or update the trend chart for a hero
+        function updateChart(heroId) {
+            if (metaChart) {
+                metaChart.destroy();
+                metaChart = null;
+            }
+            const canvas = document.getElementById('meta-trend-chart');
+            if (!canvas) return;
+            const hero = heroes.find(h => h.id === heroId);
+            if (hero) {
+                metaChart = createMetaTrendChart(canvas, hero, getHeroDisplayName(heroId));
+            }
+            // Update chart title
+            const title = document.getElementById('meta-chart-title');
+            if (title) {
+                title.textContent = `📈 ${getHeroDisplayName(heroId)} 7日胜率趋势`;
+            }
+        }
 
         container.innerHTML = `
             <div class="modal-overlay" id="modal-overlay">
                 <div class="modal-card modal-meta">
                     <div class="modal-header">
-                        <span class="modal-title">📊 版本答案 — 加速模式胜率 TOP 20</span>
+                        <span class="modal-title">📊 版本答案 — 加速模式英雄胜率</span>
                         <button class="modal-close" data-action="close-modal">✕</button>
                     </div>
                     <div class="modal-body">
+                        <div class="meta-chart-card">
+                            <div class="chart-title" id="meta-chart-title">📈 ${escapeHtml(getHeroDisplayName(selectedHeroId))} 7日胜率趋势</div>
+                            <div class="meta-chart-container">
+                                <canvas id="meta-trend-chart"></canvas>
+                            </div>
+                        </div>
                         <div class="modal-table-wrapper">
                             <table class="data-table meta-table">
                                 <thead>
                                     <tr>
                                         <th class="col-rank">#</th>
                                         <th class="col-hero">英雄</th>
-                                        <th class="col-wr">胜率</th>
-                                        <th class="col-picks">出场</th>
-                                        <th class="col-wins">胜场</th>
+                                        <th class="col-wr sortable sorted-desc" data-sort="wr">胜率 ▼</th>
+                                        <th class="col-pickrate sortable" data-sort="pickRate">选择率</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${rows}
+                                    ${renderRows(heroes, selectedHeroId)}
                                 </tbody>
                             </table>
                         </div>
-                        <div class="modal-count">仅统计出场 ≥ ${MIN_PICKS.toLocaleString()} 的英雄</div>
+                        <div class="modal-count">仅统计出场 ≥ ${MIN_PICKS.toLocaleString()} 的英雄，共 ${heroes.length} 位 · 点击英雄行查看趋势</div>
                     </div>
                 </div>
             </div>
         `;
         bindModalEvents(container);
 
+        // Draw initial chart
+        updateChart(selectedHeroId);
+
+        // Hero row click — switch chart
+        container.querySelector('.meta-table tbody').addEventListener('click', (e) => {
+            const row = e.target.closest('.meta-hero-row');
+            if (!row) return;
+            const heroId = parseInt(row.dataset.heroId, 10);
+            if (heroId === selectedHeroId) return;
+            selectedHeroId = heroId;
+
+            // Update row highlighting
+            container.querySelectorAll('.meta-hero-row').forEach(r => r.classList.remove('selected'));
+            row.classList.add('selected');
+
+            // Update chart
+            updateChart(heroId);
+        });
+
+        // Sort click handlers
+        const sortHeaders = container.querySelectorAll('.sortable');
+        sortHeaders.forEach(th => {
+            th.addEventListener('click', () => {
+                const key = th.dataset.sort;
+                if (sortKey === key) {
+                    sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+                } else {
+                    sortKey = key;
+                    sortDir = 'desc';
+                }
+
+                heroes.sort((a, b) => {
+                    const aVal = a[sortKey] || 0;
+                    const bVal = b[sortKey] || 0;
+                    return sortDir === 'desc' ? bVal - aVal : aVal - bVal;
+                });
+
+                // Update table body (keep selected hero highlighted)
+                const tbody = container.querySelector('.meta-table tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderRows(heroes, selectedHeroId);
+                }
+
+                // Update header indicators
+                const labels = { wr: '胜率', pickRate: '选择率' };
+                container.querySelectorAll('.sortable').forEach(h => {
+                    h.classList.remove('sorted-asc', 'sorted-desc');
+                    h.textContent = labels[h.dataset.sort] || '';
+                });
+
+                const clickedTh = container.querySelector(`.sortable[data-sort="${sortKey}"]`);
+                if (clickedTh) {
+                    clickedTh.classList.add(sortDir === 'desc' ? 'sorted-desc' : 'sorted-asc');
+                    clickedTh.textContent = labels[sortKey] + (sortDir === 'desc' ? ' ▼' : ' ▲');
+                }
+            });
+        });
+
     } catch (err) {
         console.error('[ui] Failed to load hero stats:', err);
         showModalAlert('加载版本答案失败: ' + (err.message || '网络错误'));
     }
+}
+
+/**
+ * Render the hero recommendation modal.
+ * @param {Map} heroMap - Map of hero_id → { localized_name, name }
+ * @param {Array} recommendations - Array of recommendation objects
+ * @param {string} myId - Player's Steam32 ID (for display)
+ */
+export function renderRecommendModal(heroMap, recommendations, myId) {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    if (!recommendations || recommendations.length === 0) {
+        showModalAlert('暂无推荐数据，请先加载个人数据后再试');
+        return;
+    }
+
+    const cards = recommendations.map((r, i) => {
+        const hm = heroMap.get(r.id);
+        const displayName = hm?.localized_name || r.name;
+        const iconUrl = hm?.name
+            ? `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${hm.name}.png`
+            : '';
+        const wrClass = r.globalWr >= 50 ? 'wr-good' : r.globalWr >= 45 ? 'wr-avg' : 'wr-bad';
+
+        let personalHtml;
+        if (r.personalGames > 0) {
+            const pWrClass = r.personalWr >= 50 ? 'wr-good' : r.personalWr >= 45 ? 'wr-avg' : 'wr-bad';
+            personalHtml = `
+                <div class="rec-stat-row">
+                    <span class="rec-stat-label">个人</span>
+                    <span class="rec-stat-value">${r.personalGames}场</span>
+                    <span class="rec-stat-wr ${pWrClass}">${r.personalWr.toFixed(1)}%</span>
+                </div>`;
+        } else {
+            personalHtml = `
+                <div class="rec-stat-row">
+                    <span class="rec-stat-label">个人</span>
+                    <span class="rec-stat-value rec-untried">尚未使用</span>
+                </div>`;
+        }
+
+        // Medal emoji for top recommendations
+        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+
+        return `
+            <div class="rec-card">
+                <div class="rec-medal">${medals[i] || ''}</div>
+                <div class="rec-hero">
+                    <div class="hero-cell">
+                        ${iconUrl ? `<img src="${iconUrl}" alt="${escapeHtml(displayName)}" class="hero-icon-sm" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>` : `<span class="hero-icon-fallback">${escapeHtml(displayName[0])}</span>`}
+                        <span class="rec-hero-name">${escapeHtml(displayName)}</span>
+                    </div>
+                </div>
+                <div class="rec-stats">
+                    <div class="rec-stat-row">
+                        <span class="rec-stat-label">全局</span>
+                        <span class="rec-stat-value">${r.globalPicks.toLocaleString()}场</span>
+                        <span class="rec-stat-wr ${wrClass}">${r.globalWr.toFixed(1)}%</span>
+                    </div>
+                    ${personalHtml}
+                </div>
+                <div class="rec-reason">${escapeHtml(r.reason)}</div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-recommend">
+                <div class="modal-header">
+                    <span class="modal-title">🎯 英雄推荐</span>
+                    <button class="modal-close" data-action="close-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="rec-subtitle">综合版本答案与个人数据，为您推荐以下英雄</div>
+                    <div class="rec-cards">
+                        ${cards}
+                    </div>
+                    <div class="rec-footer">基于加速模式全局数据与您的个人战绩生成 · 玩家 ID: ${escapeHtml(myId)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
 }
 
 /**

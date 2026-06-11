@@ -497,6 +497,159 @@ a:hover {
     height: 100% !important;
 }
 
+/* Meta modal chart */
+.meta-chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.meta-chart-container {
+    position: relative;
+    height: 220px;
+}
+
+.meta-chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Pick rate column */
+.col-pickrate {
+    min-width: 65px;
+    text-align: right;
+}
+
+/* Selected hero row in meta table */
+.meta-hero-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.meta-hero-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.meta-hero-row.selected {
+    background: rgba(74, 144, 217, 0.12);
+    border-left: 3px solid #4a90d9;
+}
+
+.meta-hero-row.selected:hover {
+    background: rgba(74, 144, 217, 0.18);
+}
+
+/* --- Hero Recommendation Modal --- */
+.modal-recommend {
+    max-width: 560px;
+    width: 100%;
+}
+
+.rec-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.rec-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rec-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.15s;
+}
+
+.rec-card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.rec-medal {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+    width: 32px;
+    text-align: center;
+}
+
+.rec-hero {
+    flex: 1;
+    min-width: 120px;
+}
+
+.rec-hero .hero-cell {
+    gap: 8px;
+}
+
+.rec-hero-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.rec-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+}
+
+.rec-stat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+}
+
+.rec-stat-label {
+    color: var(--text-muted);
+    min-width: 28px;
+}
+
+.rec-stat-value {
+    color: var(--text-secondary);
+    min-width: 50px;
+}
+
+.rec-stat-wr {
+    font-weight: 600;
+    min-width: 48px;
+    text-align: right;
+}
+
+.rec-untried {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.75rem;
+}
+
+.rec-reason {
+    width: 100%;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    line-height: 1.5;
+}
+
+.rec-footer {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 20px;
+}
+
 /* --- Data Tables --- */
 .table-wrapper,
 .matches-table-wrapper,
@@ -529,6 +682,11 @@ a:hover {
 }
 
 .data-table th.sortable:hover {
+    color: var(--text-primary);
+}
+
+.data-table th.sorted-asc,
+.data-table th.sorted-desc {
     color: var(--text-primary);
 }
 
@@ -2290,6 +2448,25 @@ a:hover {
 
     .modal-body {
         padding: 14px;
+    }
+
+    .rec-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        position: relative;
+        padding-right: 40px;
+    }
+
+    .rec-medal {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        font-size: 1.2rem;
+    }
+
+    .rec-stats {
+        width: 100%;
     }
 
     .modal-footer {

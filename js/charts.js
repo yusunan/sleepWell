@@ -381,6 +381,115 @@ function groupMatchesByWeek(matches) {
 }
 
 /**
+ * Create a 7-day meta trend line chart for a single hero.
+ *
+ * @param {HTMLCanvasElement} canvas - The canvas element
+ * @param {Object} hero - Hero object with { picksTrend, winsTrend }
+ * @param {string} heroName - Display name for the chart label
+ * @returns {Chart} Chart.js instance
+ */
+export function createMetaTrendChart(canvas, hero, heroName) {
+    if (!window.Chart) {
+        console.warn('Chart.js not loaded');
+        return null;
+    }
+
+    if (!hero) return null;
+
+    const dayLabels = ['6天前', '5天前', '4天前', '3天前', '2天前', '1天前', '今天'];
+    const picksTrend = hero.picksTrend || [];
+    const winsTrend = hero.winsTrend || [];
+
+    const winRates = [];
+    for (let i = 0; i < 7; i++) {
+        const dp = picksTrend[i] || 0;
+        const dw = winsTrend[i] || 0;
+        winRates.push(dp > 0 ? parseFloat((dw / dp * 100).toFixed(1)) : null);
+    }
+
+    // Compute dynamic Y-axis range to show fluctuations clearly
+    const validRates = winRates.filter(v => v !== null);
+    let yMin = 0, yMax = 100;
+    if (validRates.length > 0) {
+        const dataMin = Math.min(...validRates);
+        const dataMax = Math.max(...validRates);
+        const range = dataMax - dataMin;
+        // Pad by at least 5%, or 2x the range if very flat
+        const padding = Math.max(range * 0.8, 5);
+        yMin = Math.max(0, Math.floor(dataMin - padding));
+        yMax = Math.min(100, Math.ceil(dataMax + padding));
+        // Ensure a minimum visual span of 10%
+        if (yMax - yMin < 10) {
+            const mid = (yMin + yMax) / 2;
+            yMin = Math.max(0, Math.floor(mid - 5));
+            yMax = Math.min(100, Math.ceil(mid + 5));
+        }
+    }
+
+    return new window.Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: dayLabels,
+            datasets: [
+                {
+                    label: `${heroName} 胜率 (%)`,
+                    data: winRates,
+                    borderColor: '#4a90d9',
+                    backgroundColor: 'rgba(74, 144, 217, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#4a90d9',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1,
+                    tension: 0.3,
+                    fill: true,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#9098a8', font: { size: 11 } },
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    min: yMin,
+                    max: yMax,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#9098a8',
+                        font: { size: 11 },
+                        callback: v => v + '%',
+                        stepSize: (yMax - yMin) <= 10 ? 1 : undefined,
+                    },
+                },
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#9098a8', font: { size: 12 } },
+                },
+                tooltip: {
+                    callbacks: {
+                        label(ctx) {
+                            return `胜率: ${ctx.parsed.y}%`;
+                        },
+                    },
+                },
+            },
+        },
+    });
+}
+
+/**
  * Destroy a Chart.js instance safely.
  */
 export function destroyChart(chart) {
