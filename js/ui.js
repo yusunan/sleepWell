@@ -978,13 +978,13 @@ export function renderChartCanvases() {
 
     chartsSection.innerHTML = `
         <div class="chart-grid">
-            <div class="chart-card">
-                <h3 class="chart-title">胜率趋势</h3>
+            <div class="chart-card" id="mmr-chart-card" style="display:none;">
+                <h3 class="chart-title">隐藏分趋势</h3>
                 <div class="chart-container">
-                    <canvas id="winrate-trend-chart"></canvas>
+                    <canvas id="mmr-trend-chart"></canvas>
                 </div>
             </div>
-            <div class="chart-card">
+            <div class="chart-card chart-card-full" id="hero-chart-card">
                 <h3 class="chart-title">英雄表现</h3>
                 <div class="chart-container">
                     <canvas id="hero-perf-chart"></canvas>

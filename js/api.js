@@ -228,9 +228,12 @@ export async function getRecentMatches(accountId) {
 /**
  * Get Turbo mode counts (accurate with significant=0).
  */
-export async function getTurboCounts(accountId) {
-    return request(`/players/${accountId}/counts`, TURBO_PARAMS, {
-        cacheKey: STORAGE_KEYS.COUNTS_PREFIX + accountId + '_turbo',
+export async function getTurboCounts(accountId, patch) {
+    const params = { ...TURBO_PARAMS };
+    if (patch) params.patch = patch;
+    const suffix = patch ? '_p' + patch : '';
+    return request(`/players/${accountId}/counts`, params, {
+        cacheKey: STORAGE_KEYS.COUNTS_PREFIX + accountId + '_turbo' + suffix,
         cacheTtl: CACHE_TTL.STATS,
     });
 }

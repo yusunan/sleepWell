@@ -54,8 +54,8 @@ import {
     showModalAlert,
 } from './ui.js';
 import {
-    createWinRateTrend,
     createHeroPerformanceChart,
+    createMmrTrendChart,
     destroyChart,
 } from './charts.js';
 
@@ -393,6 +393,14 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
         }
         state.profile = profile; state.turboCounts = turboCounts; state.turboStats = turboStats;
         state.allRecentMatches = recentMatches || [];
+
+        // Track MMR history for the main player
+        let mmrHistory = [];
+        if (accountId === '126222046') {
+            mmrHistory = trackMmrHistory(accountId, profile);
+        }
+        state.mmrHistory = mmrHistory;
+
         updateRateLimitDisplay();
 
         // Extract patches
@@ -434,7 +442,7 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
                 renderSleepCard('sleep-section', state.sleepEval, getSleepMessage(state.sleepEval, isEnemy, state.heroMap, isTeammate), isEnemy, isTeammate);
             }
         }
-        renderChartCanvases(); createCharts(computedStats, turboMatches);
+        renderChartCanvases(); createCharts(computedStats);
         updateRateLimitDisplay();
         console.log(`[睡了么] Done. Sleep score: ${state.sleepEval?.score}`);
 
@@ -464,14 +472,70 @@ async function onPatchChange(accountId, isEnemy, patch) {
     showLoading('summary-section', LOADING_TEXT);
     showLoading('hero-table-section', LOADING_TEXT);
     try {
-        const turboStats = await fetchTurboStats(accountId, patch);
+        const [turboStats, turboCounts] = await Promise.all([
+            fetchTurboStats(accountId, patch),
+            getTurboCounts(accountId, patch),
+        ]);
         state.turboStats = turboStats;
-        const computedStats = computeSummaryFromData(state.turboCounts, turboStats, state.turboMatches);
+        state.turboCounts = turboCounts;
+        const computedStats = computeSummaryFromData(turboCounts, turboStats, state.turboMatches);
         state.turboStats = turboStats;
         renderTurboSummary('summary-section', computedStats);
         renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null);
-        renderChartCanvases(); createCharts(computedStats, state.turboMatches);
+        renderChartCanvases(); createCharts(computedStats);
     } catch (err) { console.warn('[睡了么] Patch re-fetch failed:', err); }
+}
+
+// --- MMR History ---
+
+/**
+ * Track MMR history: extract computed_mmr_turbo from profile, dedup consecutive
+ * identical values (keep only the latest), persist to localStorage.
+ * Only call this for the main player (not enemies/teammates).
+ *
+ * @param {string} accountId
+ * @param {object} profile - Player profile from getPlayer()
+ * @returns {Array<{ts: number, mmr: number}>} Updated history, sorted by ts ascending
+ */
+function trackMmrHistory(accountId, profile) {
+    const mmr = profile.computed_mmr_turbo;
+    if (mmr == null) return [];
+
+    const key = STORAGE_KEYS.MMR_HISTORY_PREFIX + accountId;
+    let history = [];
+
+    // Load existing persistent history
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                history = parsed.filter(e => typeof e.ts === 'number' && typeof e.mmr === 'number');
+            }
+        }
+    } catch {
+        history = [];
+    }
+
+    // Dedup: if today's value equals the last entry's value, replace it (keep latest timestamp)
+    // This ensures the same value doesn't appear twice at different timestamps
+    const last = history.length > 0 ? history[history.length - 1] : null;
+    if (last && last.mmr === mmr) {
+        // Replace with today's timestamp
+        last.ts = Date.now();
+    } else {
+        // New different value — append
+        history.push({ ts: Date.now(), mmr });
+    }
+
+    // Persist
+    try {
+        localStorage.setItem(key, JSON.stringify(history));
+    } catch {
+        // QuotaExceeded or unavailable — degrade gracefully
+    }
+
+    return history;
 }
 
 // --- Computation ---
@@ -556,11 +620,21 @@ function calculateMaxWinStreak(matches) {
 }
 
 // --- Charts ---
-function createCharts(stats, matches) {
-    const tc = document.getElementById('winrate-trend-chart');
-    if (tc && matches.length > 0) { const c = createWinRateTrend(tc, matches); if (c) state.charts.winRateTrend = c; }
+function createCharts(stats) {
     const hc = document.getElementById('hero-perf-chart');
     if (hc && stats.heroes?.length > 0) { const c = createHeroPerformanceChart(hc, stats.heroes, state.heroMap); if (c) state.charts.heroPerformance = c; }
+
+    const mc = document.getElementById('mmr-trend-chart');
+    if (mc && state.mmrHistory && state.mmrHistory.length > 3) {
+        const c = createMmrTrendChart(mc, state.mmrHistory);
+        if (c) {
+            state.charts.mmrTrend = c;
+            const mmrCard = document.getElementById('mmr-chart-card');
+            const heroCard = document.getElementById('hero-chart-card');
+            if (mmrCard) mmrCard.style.display = '';
+            if (heroCard) heroCard.classList.remove('chart-card-full');
+        }
+    }
 }
 
 // --- URL Hash ---
