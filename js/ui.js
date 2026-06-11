@@ -408,8 +408,6 @@ export function renderRecentMatches(containerId, matches, heroMap) {
         { key: 'result', label: '结果', sortable: true },
         { key: 'kda', label: '战绩', sortable: true },
         { key: 'rating', label: '评价', sortable: true },
-        { key: 'gpm', label: 'GPM', sortable: true },
-        { key: 'xpm', label: 'XPM', sortable: true },
         { key: 'duration', label: '时长', sortable: true },
         { key: 'link', label: '比赛', sortable: false },
     ];

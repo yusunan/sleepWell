@@ -1189,6 +1189,18 @@ a:hover {
         font-size: 0.7rem;
     }
 
+    /* Keep rating column compact on mobile */
+    .matches-table .col-rating {
+        width: 36px;
+    }
+    .matches-table .col-kda {
+        width: 60px;
+    }
+    .matches-table .col-gpm,
+    .matches-table .col-xpm {
+        width: 48px;
+    }
+
     /* Hide less important columns on mobile — keep GPM/XPM visible */
     .matches-table th.col-duration,
     .matches-table td.col-duration,
@@ -1199,6 +1211,25 @@ a:hover {
 }
 
 @media (max-width: 480px) {
+    /* Hide GPM/XPM on very small screens for matches table too */
+    .matches-table th.col-gpm,
+    .matches-table td.col-gpm,
+    .matches-table th.col-xpm,
+    .matches-table td.col-xpm {
+        display: none;
+    }
+
+    .matches-table .col-rating {
+        width: 32px;
+    }
+    .matches-table .col-kda {
+        width: 52px;
+    }
+    .rating-badge {
+        padding: 1px 5px;
+        font-size: 0.68rem;
+    }
+
     .site-title {
         font-size: 0.85rem;
     }
