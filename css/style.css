@@ -1191,10 +1191,10 @@ a:hover {
 
     /* Compact result column, expand hero name on mobile */
     .matches-table .col-result {
-        width: 40px;
+        width: 20px;
     }
     .matches-table .col-hero {
-        min-width: 70px;
+        min-width: 85px;
     }
     /* Keep rating column compact on mobile */
     .matches-table .col-rating {
@@ -1227,10 +1227,10 @@ a:hover {
     }
 
     .matches-table .col-result {
-        width: 32px;
+        width: 20px;
     }
     .matches-table .col-hero {
-        min-width: 64px;
+        min-width: 75px;
     }
     .matches-table .col-rating {
         width: 32px;
