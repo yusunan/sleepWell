@@ -427,7 +427,7 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
             renderPatchSelector('patch-selector-section', state.availablePatches, state.selectedPatch,
                 (patch) => onPatchChange(accountId, isEnemy, patch));
         }
-        renderFullDashboard(profile, computedStats, state.heroMap, turboMatches);
+        renderFullDashboard(profile, computedStats, state.heroMap, turboMatches, accountId);
 
         // Check if this is an inactive teammate (>1 year no games)
         if (isTeammate && isPlayerInactive(state.allRecentMatches)) {
@@ -481,7 +481,7 @@ async function onPatchChange(accountId, isEnemy, patch) {
         const computedStats = computeSummaryFromData(turboCounts, turboStats, state.turboMatches);
         state.turboStats = turboStats;
         renderTurboSummary('summary-section', computedStats);
-        renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null);
+        renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null, accountId);
         renderChartCanvases(); createCharts(computedStats);
     } catch (err) { console.warn('[睡了么] Patch re-fetch failed:', err); }
 }

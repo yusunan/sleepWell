@@ -773,6 +773,23 @@ a:hover {
     color: var(--color-loss);
 }
 
+/* KDA rating badges: 夯→猛→稳→混→拉 */
+.rating-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    min-width: 20px;
+    text-align: center;
+}
+
+.rating-4 { background: #ffd700; color: #5c3d00; }  /* 夯 */
+.rating-3 { background: #ff9800; color: #fff; }     /* 猛 */
+.rating-2 { background: #4caf50; color: #fff; }     /* 稳 */
+.rating-1 { background: #9e9e9e; color: #fff; }     /* 混 */
+.rating-0 { background: #f44336; color: #fff; }     /* 拉 */
+
 .col-link a {
     font-size: 0.75rem;
     margin-right: 6px;
@@ -1256,16 +1273,6 @@ a:hover {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-    }
-
-    /* Hide more columns on very small screens — keep GPM/XPM */
-    .matches-table th.col-k,
-    .matches-table td.col-k,
-    .matches-table th.col-d,
-    .matches-table td.col-d,
-    .matches-table th.col-a,
-    .matches-table td.col-a {
-        display: none;
     }
 
     .hero-table .col-gpm,

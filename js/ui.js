@@ -3,7 +3,7 @@
 // ============================================================
 
 import { LOBBY_NAMES, REGION_NAMES, RATE_LIMIT, PATCH_VERSIONS } from './config.js';
-import { getMatchesWithPlayer, getHeroStats } from './api.js';
+import { getMatchesWithPlayer, getHeroStats, getHeroMatches } from './api.js';
 import { createMetaTrendChart } from './charts.js';
 
 // --- Tiny DOM Builder ---
@@ -242,13 +242,15 @@ let lastMatchesHeroMap = null;
 let lastPeersData = null;
 let lastHeroesData = null;
 let lastHeroesHeroMap = null;
-export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
+let lastHeroesAccountId = null;
+export function renderHeroTable(containerId, heroes, heroMap, onSortChange, accountId) {
     const container = $(containerId);
     if (!container) return;
 
     // Store data for re-sort
     lastHeroesData = heroes;
     lastHeroesHeroMap = heroMap;
+    if (accountId !== undefined) lastHeroesAccountId = accountId;
 
     if (!heroes || heroes.length === 0) {
         showEmpty(containerId, '暂无加速模式英雄数据');
@@ -315,24 +317,22 @@ export function renderHeroTable(containerId, heroes, heroMap, onSortChange) {
             if (onSortChange) {
                 onSortChange();
             } else if (lastHeroesData && lastHeroesHeroMap) {
-                renderHeroTable(containerId, lastHeroesData, lastHeroesHeroMap, onSortChange);
+                renderHeroTable(containerId, lastHeroesData, lastHeroesHeroMap, onSortChange, lastHeroesAccountId);
             }
         });
     });
 
-    // Attach hero row click for detail (optional)
+    // Attach hero row click — show recent matches modal for that hero
     const rows = container.querySelectorAll('.hero-row');
     rows.forEach(row => {
         row.addEventListener('click', () => {
-            const heroId = row.dataset.heroId;
+            const heroId = parseInt(row.dataset.heroId);
             // Toggle highlight
             rows.forEach(r => r.classList.remove('selected'));
             row.classList.add('selected');
-            // Emit custom event for detail panel
-            container.dispatchEvent(new CustomEvent('hero-select', {
-                detail: { heroId: parseInt(heroId) },
-                bubbles: true,
-            }));
+            // Show hero matches modal
+            const heroName = heroMap.get(heroId)?.localized_name || `Hero ${heroId}`;
+            showHeroMatchesModal(heroId, heroName, lastHeroesAccountId, heroMap);
         });
     });
 }
@@ -406,10 +406,8 @@ export function renderRecentMatches(containerId, matches, heroMap) {
         { key: 'time', label: '时间', sortable: true },
         { key: 'hero', label: '英雄', sortable: true },
         { key: 'result', label: '结果', sortable: true },
-        { key: 'k', label: 'K', sortable: true },
-        { key: 'd', label: 'D', sortable: true },
-        { key: 'a', label: 'A', sortable: true },
-        { key: 'kda', label: 'KDA', sortable: true },
+        { key: 'kda', label: '战绩', sortable: true },
+        { key: 'rating', label: '评价', sortable: true },
         { key: 'gpm', label: 'GPM', sortable: true },
         { key: 'xpm', label: 'XPM', sortable: true },
         { key: 'duration', label: '时长', sortable: true },
@@ -476,19 +474,15 @@ function sortMatches(matches, sort, heroMap) {
                 va = ((a.player_slot < 128) === a.radiant_win) ? 1 : 0;
                 vb = ((b.player_slot < 128) === b.radiant_win) ? 1 : 0;
                 break;
-            case 'k':
+            case 'kda':
                 va = a.kills || 0; vb = b.kills || 0;
                 break;
-            case 'd':
-                va = a.deaths || 0; vb = b.deaths || 0;
+            case 'rating': {
+                const ra = getKdaRating(a.kills || 0, a.deaths || 0, a.assists || 0);
+                const rb = getKdaRating(b.kills || 0, b.deaths || 0, b.assists || 0);
+                va = ra.level; vb = rb.level;
                 break;
-            case 'a':
-                va = a.assists || 0; vb = b.assists || 0;
-                break;
-            case 'kda':
-                va = a.deaths > 0 ? (a.kills + a.assists) / a.deaths : (a.kills + a.assists);
-                vb = b.deaths > 0 ? (b.kills + b.assists) / b.deaths : (b.kills + b.assists);
-                break;
+            }
             case 'gpm':
                 va = a.gold_per_min || 0; vb = b.gold_per_min || 0;
                 break;
@@ -505,6 +499,23 @@ function sortMatches(matches, sort, heroMap) {
     });
 }
 
+/**
+ * Rate a match KDA performance on the scale 夯→猛→稳→可→混→拉.
+ * @param {number} kills
+ * @param {number} deaths
+ * @param {number} assists
+ * @returns {{ label: string, level: number }} label and numeric level (5=best, 0=worst)
+ */
+function getKdaRating(kills, deaths, assists) {
+    const kda = deaths > 0 ? (kills + assists) / deaths : (kills + assists || 0);
+    if (deaths === 0 && (kills + assists) > 0) return { label: '夯', level: 4 };
+    if (kda >= 10) return { label: '夯', level: 4 };
+    if (kda >= 3)  return { label: '猛', level: 3 };
+    if (kda >= 2)  return { label: '稳', level: 2 };
+    if (kda >= 1)  return { label: '混', level: 1 };
+    return { label: '拉', level: 0 };
+}
+
 function renderMatchRow(match, heroMap) {
     const heroName = heroMap.get(match.hero_id);
     const name = heroName ? heroName.localized_name : `Hero ${match.hero_id}`;
@@ -516,10 +527,6 @@ function renderMatchRow(match, heroMap) {
     const resultClass = isWin ? 'match-win' : 'match-loss';
     const resultText = isWin ? '胜' : '负';
 
-    const kda = match.deaths > 0
-        ? ((match.kills + match.assists) / match.deaths).toFixed(1)
-        : (match.kills + match.assists).toFixed(1);
-
     const date = new Date(match.start_time * 1000);
     const now = new Date();
     const timeStr = formatRelativeTime(date, now);
@@ -527,8 +534,12 @@ function renderMatchRow(match, heroMap) {
     const duration = formatDuration(match.duration);
 
     const matchUrl = `https://www.opendota.com/matches/${match.match_id}`;
-    // Also create a dotabuff URL (but may not work for turbo matches)
     const dotabuffUrl = `https://www.dotabuff.com/matches/${match.match_id}`;
+
+    const kills = match.kills || 0;
+    const deaths = match.deaths || 0;
+    const assists = match.assists || 0;
+    const rating = getKdaRating(kills, deaths, assists);
 
     return `
         <tr class="match-row ${resultClass}" data-match-id="${match.match_id}">
@@ -540,12 +551,8 @@ function renderMatchRow(match, heroMap) {
                 </div>
             </td>
             <td class="col-result"><span class="result-badge ${isWin ? 'badge-win' : 'badge-loss'}">${resultText}</span></td>
-            <td class="col-k">${match.kills}</td>
-            <td class="col-d">${match.deaths}</td>
-            <td class="col-a">${match.assists}</td>
-            <td class="col-kda">${kda}</td>
-            <td class="col-gpm">${match.gold_per_min}</td>
-            <td class="col-xpm">${match.xp_per_min}</td>
+            <td class="col-kda">${kills}/${deaths}/${assists}</td>
+            <td class="col-rating"><span class="rating-badge rating-${rating.level}">${rating.label}</span></td>
             <td class="col-duration">${duration}</td>
             <td class="col-link">
                 <a href="${matchUrl}" target="_blank" rel="noopener" title="OpenDota">OD</a>
@@ -918,7 +925,7 @@ function formatDuration(seconds) {
 /**
  * Render the complete dashboard with all sections populated.
  */
-export function renderFullDashboard(profile, turboStats, heroMap, matches) {
+export function renderFullDashboard(profile, turboStats, heroMap, matches, accountId) {
     // Show dashboard
     showDashboard(true);
 
@@ -946,7 +953,7 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches) {
     });
 
     // Hero table
-    renderHeroTable('hero-table-section', turboStats.heroes || [], heroMap, null);
+    renderHeroTable('hero-table-section', turboStats.heroes || [], heroMap, null, accountId);
 
     // Recent matches
     renderRecentMatches('matches-section', matches, heroMap);
@@ -1541,6 +1548,131 @@ export function showModalAlert(message) {
         </div>
     `;
     bindModalEvents(container);
+}
+
+// ============================================================
+// Hero Matches Modal (click hero row in hero table)
+// ============================================================
+
+/**
+ * Show a modal with the last 20 matches for a specific hero.
+ * @param {number} heroId
+ * @param {string} heroName - Display name for the modal title
+ * @param {string} accountId - The current player's ID
+ * @param {Map} heroMap - hero_id → { localized_name, name }
+ */
+async function showHeroMatchesModal(heroId, heroName, accountId, heroMap) {
+    const container = document.getElementById('modal-container');
+    if (!container || !accountId) return;
+
+    // Show loading state
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-hero-matches">
+                <div class="modal-header">
+                    <span class="modal-title">${escapeHtml(heroName)} 最近比赛</span>
+                    <button class="modal-close" data-action="close-modal">✕</button>
+                </div>
+                <div class="modal-body" style="text-align:center;padding:48px;">
+                    <div class="spinner"></div>
+                    <p class="state-text" style="margin-top:16px;">加载中...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
+
+    try {
+        const matches = await getHeroMatches(accountId, heroId);
+        if (!Array.isArray(matches) || matches.length === 0) {
+            container.innerHTML = `
+                <div class="modal-overlay" id="modal-overlay">
+                    <div class="modal-card modal-hero-matches">
+                        <div class="modal-header">
+                            <span class="modal-title">${escapeHtml(heroName)} 最近比赛</span>
+                            <button class="modal-close" data-action="close-modal">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="state-empty">
+                                <div class="state-icon">📭</div>
+                                <p class="state-text">该英雄暂无加速模式比赛记录</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            bindModalEvents(container);
+            return;
+        }
+
+        // Sort by time descending
+        const sorted = [...matches].sort((a, b) => (b.start_time || 0) - (a.start_time || 0));
+
+        // Count wins/losses
+        let wins = 0, losses = 0;
+        for (const m of sorted) {
+            if ((m.player_slot < 128) === m.radiant_win) wins++;
+            else losses++;
+        }
+
+        container.innerHTML = `
+            <div class="modal-overlay" id="modal-overlay">
+                <div class="modal-card modal-hero-matches">
+                    <div class="modal-header">
+                        <span class="modal-title">${escapeHtml(heroName)} 最近 ${sorted.length} 场比赛</span>
+                        <button class="modal-close" data-action="close-modal">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="modal-table-wrapper">
+                            <table class="data-table matches-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-time">时间</th>
+                                        <th class="col-hero">英雄</th>
+                                        <th class="col-result">结果</th>
+                                        <th class="col-kda">战绩</th>
+                                        <th class="col-rating">评价</th>
+                                        <th class="col-duration">时长</th>
+                                        <th class="col-link">比赛</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${sorted.map(m => renderMatchRow(m, heroMap)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="match-count">
+                            共 ${sorted.length} 场比赛 —
+                            <span class="match-wl win">${wins} 胜</span>
+                            <span class="match-wl-sep">/</span>
+                            <span class="match-wl loss">${losses} 负</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        bindModalEvents(container);
+
+    } catch (err) {
+        console.error('[ui] Failed to load hero matches:', err);
+        container.innerHTML = `
+            <div class="modal-overlay" id="modal-overlay">
+                <div class="modal-card modal-hero-matches">
+                    <div class="modal-header">
+                        <span class="modal-title">${escapeHtml(heroName)} 最近比赛</span>
+                        <button class="modal-close" data-action="close-modal">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="state-error">
+                            <div class="state-icon">❌</div>
+                            <p class="state-text">加载失败: ${escapeHtml(err.message || '网络错误')}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        bindModalEvents(container);
+    }
 }
 
 /**

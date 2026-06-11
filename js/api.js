@@ -357,3 +357,17 @@ export async function getMatchesWithPlayer(accountId, includedAccountId) {
         included_account_id: includedAccountId,
     });
 }
+
+/**
+ * Get matches for a specific hero (Turbo mode only, last 20 matches).
+ * @param {string} accountId - The player's ID
+ * @param {number} heroId - The hero ID to filter by
+ */
+export async function getHeroMatches(accountId, heroId) {
+    return request(`/players/${accountId}/matches`, {
+        game_mode: 23,
+        significant: 0,
+        hero_id: heroId,
+        limit: 20,
+    });
+}
