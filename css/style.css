@@ -1227,7 +1227,7 @@ a:hover {
     }
 
     .matches-table .col-result {
-        width: 20px;
+        width: 25px;
     }
     .matches-table .col-hero {
         min-width: 75px;
@@ -1236,7 +1236,7 @@ a:hover {
         width: 32px;
     }
     .matches-table .col-kda {
-        width: 52px;
+        width: 55px;
     }
     .rating-badge {
         padding: 1px 5px;
