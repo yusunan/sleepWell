@@ -772,6 +772,7 @@ a:hover {
     border-radius: 4px;
     margin-left: 4px;
     vertical-align: middle;
+    white-space: nowrap;
 }
 .streak-count.win {
     background: rgba(76, 175, 80, 0.25);
@@ -1230,7 +1231,7 @@ a:hover {
 
     /* Compact result column, expand hero name on mobile */
     .matches-table .col-result {
-        width: 20px;
+        min-width: 35px;
     }
     .matches-table .col-hero {
         min-width: 85px;
@@ -1245,6 +1246,13 @@ a:hover {
     .matches-table .col-gpm,
     .matches-table .col-xpm {
         width: 48px;
+    }
+
+    /* Streak badges: smaller on mobile */
+    .streak-count {
+        font-size: 0.62rem;
+        padding: 0px 3px;
+        margin-left: 2px;
     }
 
     /* Hide less important columns on mobile — keep GPM/XPM visible */
@@ -1266,7 +1274,7 @@ a:hover {
     }
 
     .matches-table .col-result {
-        width: 25px;
+        min-width: 30px;
     }
     .matches-table .col-hero {
         min-width: 75px;
