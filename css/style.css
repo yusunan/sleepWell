@@ -755,6 +755,33 @@ a:hover {
     background: rgba(244, 67, 54, 0.14);
 }
 
+/* 连胜/连败行左侧边框强调 */
+.match-row.streak-win {
+    border-left: 3px solid var(--color-win);
+}
+.match-row.streak-loss {
+    border-left: 3px solid var(--color-loss);
+}
+
+/* 连胜/连败计次徽章 */
+.streak-count {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.streak-count.win {
+    background: rgba(76, 175, 80, 0.25);
+    color: var(--color-win);
+}
+.streak-count.loss {
+    background: rgba(244, 67, 54, 0.25);
+    color: var(--color-loss);
+}
+
 .result-badge {
     display: inline-block;
     padding: 2px 10px;

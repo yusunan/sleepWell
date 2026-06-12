@@ -371,3 +371,16 @@ export async function getHeroMatches(accountId, heroId) {
         limit: 20,
     });
 }
+
+/**
+ * Get all recent matches (Turbo mode only) with a configurable limit.
+ * @param {string} accountId - The player's ID
+ * @param {number} limit - Max number of matches to fetch (default 500)
+ */
+export async function getAllMatches(accountId, limit = 500) {
+    return request(`/players/${accountId}/matches`, {
+        game_mode: 23,
+        significant: 0,
+        limit: limit,
+    });
+}

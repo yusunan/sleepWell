@@ -514,7 +514,8 @@ function getKdaRating(kills, deaths, assists) {
     return { label: '拉', level: 0 };
 }
 
-function renderMatchRow(match, heroMap) {
+function renderMatchRow(match, heroMap, streakInfo = null) {
+    // streakInfo: { type: 'win'|'loss', total: N } or null (N >= 3)
     const heroName = heroMap.get(match.hero_id);
     const name = heroName ? heroName.localized_name : `Hero ${match.hero_id}`;
     const iconUrl = heroName
@@ -539,8 +540,13 @@ function renderMatchRow(match, heroMap) {
     const assists = match.assists || 0;
     const rating = getKdaRating(kills, deaths, assists);
 
+    const streakClass = streakInfo ? ` streak-${streakInfo.type}` : '';
+    const streakBadge = streakInfo
+        ? `<span class="streak-count ${streakInfo.type}">${streakInfo.total}连${streakInfo.type === 'win' ? '胜' : '败'}</span>`
+        : '';
+
     return `
-        <tr class="match-row ${resultClass}" data-match-id="${match.match_id}">
+        <tr class="match-row ${resultClass}${streakClass}" data-match-id="${match.match_id}">
             <td class="col-time" title="${date.toLocaleString('zh-CN')}">${timeStr}</td>
             <td class="col-hero">
                 <div class="hero-cell">
@@ -548,7 +554,7 @@ function renderMatchRow(match, heroMap) {
                     <span>${escapeHtml(name)}</span>
                 </div>
             </td>
-            <td class="col-result"><span class="result-badge ${isWin ? 'badge-win' : 'badge-loss'}">${resultText}</span></td>
+            <td class="col-result"><span class="result-badge ${isWin ? 'badge-win' : 'badge-loss'}">${resultText}</span>${streakBadge}</td>
             <td class="col-kda">${kills}/${deaths}/${assists}</td>
             <td class="col-rating"><span class="rating-badge rating-${rating.level}">${rating.label}</span></td>
             <td class="col-duration">${duration}</td>
@@ -1154,6 +1160,7 @@ export function renderPlayerList(containerId, playerList, callbacks) {
                         <button class="btn btn-sm btn-advanced" data-action="open-meta">📊 版本答案</button>
                         <button class="btn btn-sm btn-advanced" data-action="open-pros">👑 与神同行</button>
                         <button class="btn btn-sm btn-advanced" data-action="open-recommend">🎯 英雄推荐</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-all-matches">📋 500场数据</button>
                     </div>
                 </div>
             </div>
@@ -1263,6 +1270,9 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         }
         if (action === 'open-recommend' && callbacks.onRecommend) {
             callbacks.onRecommend();
+        }
+        if (action === 'open-all-matches' && callbacks.onOpenAllMatches) {
+            callbacks.onOpenAllMatches();
         }
     });
 
@@ -1671,6 +1681,117 @@ async function showHeroMatchesModal(heroId, heroName, accountId, heroMap) {
         `;
         bindModalEvents(container);
     }
+}
+
+/**
+ * Render the "500 matches" modal with streak highlighting.
+ * @param {Array} matches - Array of match objects from API
+ * @param {Map} heroMap - Map of hero_id → hero info
+ */
+export function renderAllMatchesModal(matches, heroMap) {
+    const container = document.getElementById('modal-container');
+    if (!container) return;
+
+    if (!Array.isArray(matches) || matches.length === 0) {
+        container.innerHTML = `
+            <div class="modal-overlay" id="modal-overlay">
+                <div class="modal-card modal-hero-matches">
+                    <div class="modal-header">
+                        <span class="modal-title">📋 500场数据</span>
+                        <button class="modal-close" data-action="close-modal">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="state-empty">
+                            <div class="state-icon">📭</div>
+                            <p class="state-text">暂无加速模式比赛记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        bindModalEvents(container);
+        return;
+    }
+
+    // Sort by time ascending to compute streaks chronologically
+    const sorted = [...matches].sort((a, b) => (a.start_time || 0) - (b.start_time || 0));
+
+    // Compute streak info: scan for consecutive ≥3 wins or losses
+    const streakMap = new Map(); // match_id → { type, total }
+    let i = 0;
+    while (i < sorted.length) {
+        const isWin = (sorted[i].player_slot < 128) === sorted[i].radiant_win;
+        let j = i + 1;
+        while (j < sorted.length) {
+            const nextWin = (sorted[j].player_slot < 128) === sorted[j].radiant_win;
+            if (nextWin !== isWin) break;
+            j++;
+        }
+        const length = j - i;
+        if (length >= 3) {
+            const type = isWin ? 'win' : 'loss';
+            for (let k = i; k < j; k++) {
+                streakMap.set(sorted[k].match_id, { type, total: length });
+            }
+        }
+        i = j;
+    }
+
+    // Sort by time descending for display
+    const display = [...sorted].reverse();
+
+    // Count wins/losses
+    let wins = 0, losses = 0;
+    let longestWin = 0, longestLoss = 0;
+    for (const m of sorted) {
+        const isWin = (m.player_slot < 128) === m.radiant_win;
+        if (isWin) wins++; else losses++;
+    }
+    // Compute longest streaks from streakMap
+    for (const [, info] of streakMap) {
+        if (info.type === 'win' && info.total > longestWin) longestWin = info.total;
+        if (info.type === 'loss' && info.total > longestLoss) longestLoss = info.total;
+    }
+
+    container.innerHTML = `
+        <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-card modal-hero-matches">
+                <div class="modal-header">
+                    <span class="modal-title">📋 最近 ${display.length} 场比赛</span>
+                    <button class="modal-close" data-action="close-modal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-table-wrapper">
+                        <table class="data-table matches-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-time">时间</th>
+                                    <th class="col-hero">英雄</th>
+                                    <th class="col-result">结果</th>
+                                    <th class="col-kda">战绩</th>
+                                    <th class="col-rating">评价</th>
+                                    <th class="col-duration">时长</th>
+                                    <th class="col-link">比赛</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${display.map(m => renderMatchRow(m, heroMap, streakMap.get(m.match_id) || null)).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="match-count">
+                        共 ${display.length} 场比赛 —
+                        <span class="match-wl win">${wins} 胜</span>
+                        <span class="match-wl-sep">/</span>
+                        <span class="match-wl loss">${losses} 负</span>
+                        ${longestWin > 0 ? ` · 最长<span class="match-wl win">${longestWin}连胜</span>` : ''}
+                        ${longestLoss > 0 ? ` · 最长<span class="match-wl loss">${longestLoss}连败</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    bindModalEvents(container);
 }
 
 /**

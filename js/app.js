@@ -18,6 +18,7 @@ import {
     getHeroStats,
     getTurboHeroStats,
     getRateLimitStatus,
+    getAllMatches,
     cancelAll,
     PlayerNotFoundError,
     RateLimitError,
@@ -51,6 +52,7 @@ import {
     renderMetaHeroesModal,
     renderRecommendModal,
     renderProsModal,
+    renderAllMatchesModal,
     showModalAlert,
 } from './ui.js';
 import {
@@ -169,6 +171,7 @@ function getListCallbacks() {
         onOpenMeta: () => openMeta(),
         onOpenPros: () => openPros(),
         onRecommend: () => openRecommend(),
+        onOpenAllMatches: () => openAllMatches(),
     };
 }
 function switchToMyPlayer() { if (state.isLoading || !state.playerList.myId) return; state.isEnemy = false; state.isTeammate = false; document.getElementById('search-input').value = state.playerList.myId; loadDashboard(state.playerList.myId, false, false); }
@@ -197,6 +200,21 @@ async function openPros() {
     } catch (err) {
         console.error('[睡了么] Pros error:', err);
         showModalAlert('加载与神同行数据失败: ' + (err.message || '未知错误'));
+    }
+}
+
+async function openAllMatches() {
+    if (!state.playerList.myId) {
+        showModalAlert('请先在左侧「本人」区域设置您的 Steam32 ID');
+        return;
+    }
+    try {
+        showModalLoading();
+        const matches = await getAllMatches(state.playerList.myId, 500);
+        renderAllMatchesModal(Array.isArray(matches) ? matches : [], state.heroMap);
+    } catch (err) {
+        console.error('[睡了么] All matches error:', err);
+        showModalAlert('加载500场比赛数据失败: ' + (err.message || '未知错误'));
     }
 }
 
