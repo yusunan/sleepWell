@@ -387,8 +387,34 @@ export function renderRecentMatches(containerId, matches, heroMap) {
         return;
     }
 
-    // Sort matches
+    // Sort matches for display
     const sorted = sortMatches([...matches], matchTableSort, heroMap);
+
+    // Compute streaks chronologically (on start_time ascending)
+    const chrono = [...matches].sort((a, b) => (a.start_time || 0) - (b.start_time || 0));
+    const streakMap = new Map();
+    const breakerMap = new Map();
+    let si = 0;
+    while (si < chrono.length) {
+        const isWin = (chrono[si].player_slot < 128) === chrono[si].radiant_win;
+        let sj = si + 1;
+        while (sj < chrono.length) {
+            const nextWin = (chrono[sj].player_slot < 128) === chrono[sj].radiant_win;
+            if (nextWin !== isWin) break;
+            sj++;
+        }
+        const slen = sj - si;
+        if (slen >= 3) {
+            const stype = isWin ? 'win' : 'loss';
+            for (let sk = si; sk < sj; sk++) {
+                streakMap.set(chrono[sk].match_id, { type: stype, total: slen });
+            }
+            if (!isWin && sj < chrono.length) {
+                breakerMap.set(chrono[sj].match_id, { total: slen });
+            }
+        }
+        si = sj;
+    }
 
     // Count wins and losses
     let wins = 0, losses = 0;
@@ -426,7 +452,10 @@ export function renderRecentMatches(containerId, matches, heroMap) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${sorted.map(m => renderMatchRow(m, heroMap)).join('')}
+                    ${sorted.map(m => {
+                        const info = streakMap.get(m.match_id) || (breakerMap.get(m.match_id) ? { type: 'breaker', total: breakerMap.get(m.match_id).total } : null);
+                        return renderMatchRow(m, heroMap, info);
+                    }).join('')}
                 </tbody>
             </table>
         </div>
@@ -515,7 +544,7 @@ function getKdaRating(kills, deaths, assists) {
 }
 
 function renderMatchRow(match, heroMap, streakInfo = null) {
-    // streakInfo: { type: 'win'|'loss', total: N } or null (N >= 3)
+    // streakInfo: { type: 'win'|'loss'|'breaker', total: N } or null (N >= 3)
     const heroName = heroMap.get(match.hero_id);
     const name = heroName ? heroName.localized_name : `Hero ${match.hero_id}`;
     const iconUrl = heroName
@@ -540,10 +569,17 @@ function renderMatchRow(match, heroMap, streakInfo = null) {
     const assists = match.assists || 0;
     const rating = getKdaRating(kills, deaths, assists);
 
-    const streakClass = streakInfo ? ` streak-${streakInfo.type}` : '';
-    const streakBadge = streakInfo
-        ? `<span class="streak-count ${streakInfo.type}">${streakInfo.total}连${streakInfo.type === 'win' ? '胜' : '败'}</span>`
-        : '';
+    let streakClass = '';
+    let streakBadge = '';
+    if (streakInfo) {
+        if (streakInfo.type === 'breaker') {
+            streakClass = ' streak-breaker';
+            streakBadge = `<span class="streak-count breaker">🔥 终结${streakInfo.total}连败</span>`;
+        } else {
+            streakClass = ` streak-${streakInfo.type}`;
+            streakBadge = `<span class="streak-count ${streakInfo.type}">${streakInfo.total}连${streakInfo.type === 'win' ? '胜' : '败'}</span>`;
+        }
+    }
 
     return `
         <tr class="match-row ${resultClass}${streakClass}" data-match-id="${match.match_id}">
@@ -1718,6 +1754,7 @@ export function renderAllMatchesModal(matches, heroMap) {
 
     // Compute streak info: scan for consecutive ≥3 wins or losses
     const streakMap = new Map(); // match_id → { type, total }
+    const breakerMap = new Map(); // match_id → { total } for matches that break >=3 loss streaks
     let i = 0;
     while (i < sorted.length) {
         const isWin = (sorted[i].player_slot < 128) === sorted[i].radiant_win;
@@ -1732,6 +1769,10 @@ export function renderAllMatchesModal(matches, heroMap) {
             const type = isWin ? 'win' : 'loss';
             for (let k = i; k < j; k++) {
                 streakMap.set(sorted[k].match_id, { type, total: length });
+            }
+            // Mark breaker: the first match AFTER a loss streak
+            if (!isWin && j < sorted.length) {
+                breakerMap.set(sorted[j].match_id, { total: length });
             }
         }
         i = j;
@@ -1775,7 +1816,12 @@ export function renderAllMatchesModal(matches, heroMap) {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${display.map(m => renderMatchRow(m, heroMap, streakMap.get(m.match_id) || null)).join('')}
+                                ${display.map(m => {
+                                    const si = streakMap.get(m.match_id);
+                                    const bi = breakerMap.get(m.match_id);
+                                    const info = si || (bi ? { type: 'breaker', total: bi.total } : null);
+                                    return renderMatchRow(m, heroMap, info);
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>

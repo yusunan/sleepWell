@@ -782,6 +782,18 @@ a:hover {
     color: var(--color-loss);
 }
 
+/* 终结连败徽章 */
+.streak-count.breaker {
+    background: rgba(255, 152, 0, 0.3);
+    color: #ff9800;
+    font-size: 0.72rem;
+}
+
+/* 终结连败行左侧金色边框 */
+.match-row.streak-breaker {
+    border-left: 3px solid #ff9800;
+}
+
 .result-badge {
     display: inline-block;
     padding: 2px 10px;
