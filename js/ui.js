@@ -1794,6 +1794,43 @@ export function renderAllMatchesModal(matches, heroMap) {
         if (info.type === 'loss' && info.total > longestLoss) longestLoss = info.total;
     }
 
+    // Compute win rate by rank tier (using average_rank, same format as rank_tier)
+    const TIER_NAMES = { 1: '先锋', 2: '卫士', 3: '中军', 4: '统帅', 5: '传奇', 6: '万古', 7: '超凡', 8: '冠绝' };
+    const rankStats = new Map(); // tier → { wins, losses }
+    let hasRankData = false;
+    for (const m of sorted) {
+        const ar = m.average_rank;
+        if (ar && ar >= 10) {
+            hasRankData = true;
+            const tier = Math.floor(ar / 10);
+            const name = TIER_NAMES[tier] || ('分段' + tier);
+            if (!rankStats.has(name)) rankStats.set(name, { wins: 0, losses: 0 });
+            const rs = rankStats.get(name);
+            const isWin = (m.player_slot < 128) === m.radiant_win;
+            if (isWin) rs.wins++; else rs.losses++;
+        }
+    }
+    // Order by tier descending
+    const rankEntries = [...rankStats.entries()].sort((a, b) => {
+        const ta = Object.entries(TIER_NAMES).find(([, v]) => v === a[0]);
+        const tb = Object.entries(TIER_NAMES).find(([, v]) => v === b[0]);
+        return (tb ? Number(tb[0]) : 0) - (ta ? Number(ta[0]) : 0);
+    });
+    const rankSummaryHtml = hasRankData ? `
+        <div class="rank-winrate-bar">
+            ${rankEntries.map(([tier, rs]) => {
+                const total = rs.wins + rs.losses;
+                const wr = total > 0 ? Math.round(rs.wins / total * 100) : 0;
+                const color = wr >= 55 ? 'var(--color-win)' : wr >= 45 ? 'var(--text-secondary)' : 'var(--color-loss)';
+                return `<span class="rank-wr-item">
+                    <span class="rank-wr-tier">${tier}胜率</span>
+                    <span class="rank-wr-pct" style="color:${color}">${wr}%</span>
+                    <span class="rank-wr-games">(${total}场)</span>
+                </span>`;
+            }).join('')}
+        </div>
+    ` : '';
+
     container.innerHTML = `
         <div class="modal-overlay" id="modal-overlay">
             <div class="modal-card modal-hero-matches">
@@ -1802,6 +1839,7 @@ export function renderAllMatchesModal(matches, heroMap) {
                     <button class="modal-close" data-action="close-modal">✕</button>
                 </div>
                 <div class="modal-body">
+                    ${rankSummaryHtml}
                     <div class="modal-table-wrapper">
                         <table class="data-table matches-table">
                             <thead>

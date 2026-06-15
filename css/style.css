@@ -795,6 +795,38 @@ a:hover {
     border-left: 3px solid #ff9800;
 }
 
+/* 分段胜率条 */
+.rank-winrate-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    font-size: 0.82rem;
+}
+.rank-wr-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+    white-space: nowrap;
+}
+.rank-wr-tier {
+    color: var(--text-secondary);
+    font-weight: 600;
+    min-width: 28px;
+}
+.rank-wr-pct {
+    font-weight: 700;
+    min-width: 32px;
+}
+.rank-wr-games {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
 .result-badge {
     display: inline-block;
     padding: 2px 10px;
