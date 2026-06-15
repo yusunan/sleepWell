@@ -1821,7 +1821,7 @@ export function renderAllMatchesModal(matches, heroMap) {
             ${rankEntries.map(([tier, rs]) => {
                 const total = rs.wins + rs.losses;
                 const wr = total > 0 ? Math.round(rs.wins / total * 100) : 0;
-                const color = wr >= 55 ? 'var(--color-win)' : wr >= 45 ? 'var(--text-secondary)' : 'var(--color-loss)';
+                const color = wr >= 51 ? 'var(--color-win)' : wr >= 49 ? 'var(--text-secondary)' : 'var(--color-loss)';
                 return `<span class="rank-wr-item">
                     <span class="rank-wr-tier">${tier}胜率</span>
                     <span class="rank-wr-pct" style="color:${color}">${wr}%</span>
