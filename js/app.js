@@ -19,6 +19,7 @@ import {
     getTurboHeroStats,
     getRateLimitStatus,
     getAllMatches,
+    getWeeklyMatches,
     cancelAll,
     PlayerNotFoundError,
     RateLimitError,
@@ -73,6 +74,7 @@ const state = {
     turboStats: null,        // { wl, heroes, totals } from fetchTurboStats
     turboMatches: [],        // Recent Turbo matches
     allRecentMatches: [],    // All recent matches (for sleep eval)
+    weeklyWinRate: null,     // { games, winRate } — this week's Turbo matches
     sleepEval: null,
     charts: {},
     playerList: { myId: null, enemyIds: [], teammateIds: [] },
@@ -374,7 +376,7 @@ async function handleSearch() {
 async function loadDashboard(accountId, isEnemy, isTeammate = false) {
     cancelAll();
     state.currentViewId = accountId; state.isEnemy = isEnemy; state.isTeammate = isTeammate; state.isLoading = true;
-    state.turboMatches = []; state.allRecentMatches = []; state.sleepEval = null;
+    state.turboMatches = []; state.allRecentMatches = []; state.sleepEval = null; state.weeklyWinRate = null;
     state.turboCounts = null; state.turboStats = null; state.selectedPatch = null; state.availablePatches = [];
 
     for (const [key, chart] of Object.entries(state.charts)) { destroyChart(chart); delete state.charts[key]; }
@@ -409,6 +411,14 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
             if (err instanceof PlayerNotFoundError) { showPlayerNotFound('dashboard'); return; }
             throw err;
         }
+
+        // Fetch weekly matches separately (non-blocking)
+        let weeklyMatches = [];
+        try {
+            weeklyMatches = await getWeeklyMatches(accountId, getDaysIntoWeek());
+        } catch (err) {
+            console.warn('[睡了么] Failed to load weekly matches:', err.message);
+        }
         state.profile = profile; state.turboCounts = turboCounts; state.turboStats = turboStats;
         state.allRecentMatches = recentMatches || [];
 
@@ -438,6 +448,8 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
 
         // Compute summary from counts + totals
         const computedStats = computeSummaryFromData(turboCounts, turboStats, turboMatches);
+        const weeklyStats = computeWeeklyWinRate(weeklyMatches || []);
+        state.weeklyWinRate = weeklyStats;
         state.sleepEval = evaluateSleep(state.allRecentMatches, state.heroMap);
 
         // Render
@@ -445,7 +457,7 @@ async function loadDashboard(accountId, isEnemy, isTeammate = false) {
             renderPatchSelector('patch-selector-section', state.availablePatches, state.selectedPatch,
                 (patch) => onPatchChange(accountId, isEnemy, patch));
         }
-        renderFullDashboard(profile, computedStats, state.heroMap, turboMatches, accountId);
+        renderFullDashboard(profile, computedStats, state.heroMap, turboMatches, accountId, weeklyStats);
 
         // Check if this is an inactive teammate (>1 year no games)
         if (isTeammate && isPlayerInactive(state.allRecentMatches)) {
@@ -498,7 +510,11 @@ async function onPatchChange(accountId, isEnemy, patch) {
         state.turboCounts = turboCounts;
         const computedStats = computeSummaryFromData(turboCounts, turboStats, state.turboMatches);
         state.turboStats = turboStats;
-        renderTurboSummary('summary-section', computedStats);
+        renderTurboSummary('summary-section', {
+            ...computedStats,
+            weeklyWinRate: state.weeklyWinRate?.winRate ?? null,
+            weeklyGames: state.weeklyWinRate?.games ?? 0,
+        });
         renderHeroTable('hero-table-section', computeHeroesFromData(turboStats.heroes, state.turboMatches), state.heroMap, null, accountId);
         renderChartCanvases(); createCharts(computedStats);
     } catch (err) { console.warn('[睡了么] Patch re-fetch failed:', err); }
@@ -557,6 +573,37 @@ function trackMmrHistory(accountId, profile) {
 }
 
 // --- Computation ---
+function getDaysIntoWeek() {
+    const day = new Date().getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    return day === 0 ? 7 : day;      // Monday=1, Tuesday=2, ..., Sunday=7
+}
+
+/** Get Unix timestamp (seconds) of this Monday 00:00:00 local time. */
+function getWeekStartTimestamp() {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sunday
+    const daysFromMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday, 0, 0, 0, 0);
+    return Math.floor(monday.getTime() / 1000);
+}
+
+function computeWeeklyWinRate(matches) {
+    if (!Array.isArray(matches) || matches.length === 0) return { games: 0, winRate: null };
+
+    // Client-side filter: API date param is a sliding 24h window, may include
+    // matches from the previous week. Keep only matches since Monday 00:00:00.
+    const weekStart = getWeekStartTimestamp();
+    const filtered = matches.filter(m => (m.start_time || 0) >= weekStart);
+
+    if (filtered.length === 0) return { games: 0, winRate: null };
+
+    let wins = 0;
+    for (const m of filtered) {
+        if ((m.player_slot < 128) === m.radiant_win) wins++;
+    }
+    return { games: filtered.length, winRate: (wins / filtered.length * 100) };
+}
+
 function computeSummaryFromData(counts, turboStats, matches) {
     const { wl, heroes, totals } = turboStats;
     const wins = wl.win || 0, losses = wl.lose || 0, totalGames = wins + losses;

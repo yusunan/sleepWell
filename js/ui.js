@@ -199,17 +199,30 @@ export function renderTurboSummary(containerId, stats) {
         direWR = 0,
         avgLastHits = 0,
         avgHeroDamage = 0,
+        weeklyWinRate = null,
+        weeklyGames = 0,
     } = stats;
 
     const kda = avgDeaths > 0
         ? ((avgKills + avgAssists) / avgDeaths).toFixed(1)
         : (avgKills + avgAssists).toFixed(1);
 
+    // Weekly win rate display
+    let weeklyValue, weeklyColor;
+    if (weeklyWinRate !== null && weeklyGames > 0) {
+        weeklyValue = weeklyWinRate.toFixed(1) + '%';
+        weeklyColor = weeklyWinRate >= 50 ? 'win' : 'loss';
+    } else {
+        weeklyValue = '暂无';
+        weeklyColor = '';
+    }
+
     const cards = [
         { icon: '🎮', label: '加速模式场次', value: totalGames.toLocaleString(), color: '' },
         { icon: '💰', label: '平均 GPM', value: Math.round(avgGpm).toLocaleString(), color: '' },
         { icon: '⚡', label: '平均 XPM', value: Math.round(avgXpm).toLocaleString(), color: '' },
         { icon: '🏆', label: '胜率', value: winRate.toFixed(1) + '%', color: winRate >= 50 ? 'win' : 'loss' },
+        { icon: '📅', label: '本周胜率', value: weeklyValue, color: weeklyColor },
         { icon: '☀️', label: '天辉方胜率', value: radiantWR.toFixed(1) + '%', color: radiantWR >= 50 ? 'win' : 'loss' },
         { icon: '🌙', label: '夜魇方胜率', value: direWR.toFixed(1) + '%', color: direWR >= 50 ? 'win' : 'loss' },
         { icon: '⚔️', label: '场均 KDA', value: kda, color: '' },
@@ -527,11 +540,11 @@ function sortMatches(matches, sort, heroMap) {
 }
 
 /**
- * Rate a match KDA performance on the scale 夯→猛→稳→可→混→拉.
+ * Rate a match KDA performance on the scale 夯→猛→稳→躺→拉.
  * @param {number} kills
  * @param {number} deaths
  * @param {number} assists
- * @returns {{ label: string, level: number }} label and numeric level (5=best, 0=worst)
+ * @returns {{ label: string, level: number }} label and numeric level (4=best, 0=worst)
  */
 function getKdaRating(kills, deaths, assists) {
     const kda = deaths > 0 ? (kills + assists) / deaths : (kills + assists || 0);
@@ -539,7 +552,7 @@ function getKdaRating(kills, deaths, assists) {
     if (kda >= 10) return { label: '夯', level: 4 };
     if (kda >= 3)  return { label: '猛', level: 3 };
     if (kda >= 2)  return { label: '稳', level: 2 };
-    if (kda >= 1)  return { label: '混', level: 1 };
+    if (kda >= 1)  return { label: '躺', level: 1 };
     return { label: '拉', level: 0 };
 }
 
@@ -741,10 +754,10 @@ function renderPeerRow(peer) {
     const withWR = withGames > 0 ? ((withWin / withGames) * 100).toFixed(1) : '-';
     const againstWR = againstGames > 0 ? ((againstWin / againstGames) * 100).toFixed(1) : '-';
 
-    const withWRClass = withGames >= 3
+    const withWRClass = withGames > 0
         ? (parseFloat(withWR) >= 60 ? 'wr-good' : parseFloat(withWR) < 40 ? 'wr-bad' : 'wr-avg')
         : 'wr-avg';
-    const againstWRClass = againstGames >= 3
+    const againstWRClass = againstGames > 0
         ? (parseFloat(againstWR) >= 60 ? 'wr-good' : parseFloat(againstWR) < 40 ? 'wr-bad' : 'wr-avg')
         : 'wr-avg';
 
@@ -965,7 +978,7 @@ function formatDuration(seconds) {
 /**
  * Render the complete dashboard with all sections populated.
  */
-export function renderFullDashboard(profile, turboStats, heroMap, matches, accountId) {
+export function renderFullDashboard(profile, turboStats, heroMap, matches, accountId, weeklyStats) {
     // Show dashboard
     showDashboard(true);
 
@@ -990,6 +1003,8 @@ export function renderFullDashboard(profile, turboStats, heroMap, matches, accou
         supportGames: turboStats.supportGames || 0,
         avgLastHits: turboStats.avgLastHits || 0,
         avgHeroDamage: turboStats.avgHeroDamage || 0,
+        weeklyWinRate: weeklyStats?.winRate ?? null,
+        weeklyGames: weeklyStats?.games ?? 0,
     });
 
     // Hero table

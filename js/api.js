@@ -384,3 +384,16 @@ export async function getAllMatches(accountId, limit = 500) {
         limit: limit,
     });
 }
+
+/**
+ * Get this week's Turbo mode matches (from Monday to today).
+ * @param {string} accountId - The player's ID
+ * @param {number} dateDays - Number of days to look back (1=Monday, 7=Sunday)
+ */
+export async function getWeeklyMatches(accountId, dateDays) {
+    return request(`/players/${accountId}/matches`, {
+        game_mode: 23,
+        significant: 0,
+        date: dateDays,
+    });
+}
