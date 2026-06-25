@@ -2,7 +2,7 @@
 // app.js — Main Controller for "睡了么" (SleepWell)
 // ============================================================
 
-import { VALIDATION, STEAM_ID_OFFSET, TURBO_MODES, API_BACKEND, FEATURES } from './config.js';
+import { VALIDATION, STEAM_ID_OFFSET, TURBO_MODES } from './config.js';
 import { STORAGE_KEYS, CACHE_VERSION } from './config.js';
 import { clearAll, get as cacheGet, set as cacheSet } from './storage.js';
 import { enrichHeroMapWithChinese } from './heroNames.js';
@@ -24,25 +24,7 @@ import {
     PlayerNotFoundError,
     RateLimitError,
     NetworkError,
-    // Proxy versions for advanced features
-    getPlayerProsProxied,
-    getAllMatchesProxied,
-    getTurboHeroStatsProxied,
-    UsageLimitError,
-    AuthError,
 } from './api.js';
-import {
-    initAuth,
-    isAuthenticated,
-    onAuthChange,
-    getCurrentUser,
-    getToken,
-    beacon,
-} from './auth.js';
-import {
-    showLoginModal,
-    updateHeaderAuth,
-} from './auth-ui.js';
 import {
     showLoading,
     renderPlayerProfile,
@@ -73,7 +55,6 @@ import {
     renderProsModal,
     renderAllMatchesModal,
     showModalAlert,
-    updateAdvancedFeatureLabels,
 } from './ui.js';
 import {
     createHeroPerformanceChart,
@@ -99,7 +80,6 @@ const state = {
     playerList: { myId: null, enemyIds: [], teammateIds: [] },
     selectedPatch: null,
     availablePatches: [],
-    usageLimits: null,       // { feature_name: { max, used, period }, ... }
 };
 
 // --- Init ---
@@ -118,20 +98,6 @@ export async function init() {
     updateRateLimitDisplay();
     renderPlayerList('player-list', state.playerList, getListCallbacks());
 
-    // Initialize auth (non-blocking)
-    initAuth().then(() => {
-        updateHeaderAuth();
-        updateAdvancedFeatureButtons();
-        renderPlayerList('player-list', state.playerList, getListCallbacks());
-    });
-
-    // Subscribe to auth changes
-    onAuthChange((_user) => {
-        updateHeaderAuth();
-        updateAdvancedFeatureButtons();
-        renderPlayerList('player-list', state.playerList, getListCallbacks());
-    });
-
     try {
         state.heroMap = await loadHeroMap();
         console.log(`[睡了么] Hero map loaded: ${state.heroMap.size} heroes`);
@@ -146,9 +112,6 @@ export async function init() {
         await loadDashboard(state.playerList.myId, false);
     }
     checkUrlHash();
-
-    // Log page view (fire-and-forget beacon)
-    beacon('page_view');
 }
 
 // --- Player List Management ---
@@ -219,14 +182,7 @@ function switchToTeammate(id) { if (state.isLoading) return; state.isEnemy = fal
 function refreshCurrentPlayer() { if (state.isLoading) return; if (state.currentViewId) loadDashboard(state.currentViewId, state.isEnemy, state.isTeammate); else if (state.playerList.myId) loadDashboard(state.playerList.myId, false, false); }
 
 async function openMeta() {
-    // Check auth for advanced features
-    if (!await requireAuthForFeature('meta_heroes', '版本答案')) return;
-
-    beacon('feature_open', { feature: 'meta_heroes' });
-
     try {
-        // Use global heroStats (public data, no proxy needed for the data),
-        // but we've already checked the usage limit above
         await renderMetaHeroesModal(state.heroMap);
     } catch (err) {
         console.error('[睡了么] Meta heroes error:', err);
@@ -235,70 +191,47 @@ async function openMeta() {
 }
 
 async function openPros() {
-    // Check auth for advanced features
-    if (!await requireAuthForFeature('pro_players', '与神同行')) return;
     if (!state.playerList.myId) {
         showModalAlert('请先在左侧「本人」区域设置您的 Steam32 ID');
         return;
     }
-    beacon('feature_open', { feature: 'pro_players' });
     try {
         showModalLoading();
-        // Use proxy version with usage tracking
-        const pros = await getPlayerProsProxied(state.playerList.myId);
+        const pros = await getPlayerPros(state.playerList.myId);
         renderProsModal(Array.isArray(pros) ? pros : [], state.playerList.myId);
     } catch (err) {
         console.error('[睡了么] Pros error:', err);
-        if (err instanceof UsageLimitError) {
-            showModalAlert(err.message);
-        } else if (err instanceof AuthError) {
-            showLoginModal({ message: '请先登录后使用与神同行功能', onSuccess: () => openPros() });
-        } else {
-            showModalAlert('加载与神同行数据失败: ' + (err.message || '未知错误'));
-        }
+        showModalAlert('加载与神同行数据失败: ' + (err.message || '未知错误'));
     }
 }
 
 async function openAllMatches() {
-    // Check auth for advanced features
-    if (!await requireAuthForFeature('all_matches', '500场数据')) return;
     if (!state.playerList.myId) {
         showModalAlert('请先在左侧「本人」区域设置您的 Steam32 ID');
         return;
     }
-    beacon('feature_open', { feature: 'all_matches' });
     try {
         showModalLoading();
-        // Use proxy version with usage tracking
-        const matches = await getAllMatchesProxied(state.playerList.myId, 500);
+        const matches = await getAllMatches(state.playerList.myId, 500);
         renderAllMatchesModal(Array.isArray(matches) ? matches : [], state.heroMap);
     } catch (err) {
         console.error('[睡了么] All matches error:', err);
-        if (err instanceof UsageLimitError) {
-            showModalAlert(err.message);
-        } else if (err instanceof AuthError) {
-            showLoginModal({ message: '请先登录后使用500场数据功能', onSuccess: () => openAllMatches() });
-        } else {
-            showModalAlert('加载500场比赛数据失败: ' + (err.message || '未知错误'));
-        }
+        showModalAlert('加载500场比赛数据失败: ' + (err.message || '未知错误'));
     }
 }
 
 async function openRecommend() {
-    // Check auth for advanced features
-    if (!await requireAuthForFeature('hero_recommend', '英雄推荐')) return;
     if (!state.playerList.myId) {
         showModalAlert('请先在左侧「本人」区域设置您的 Steam32 ID');
         return;
     }
-    beacon('feature_open', { feature: 'hero_recommend' });
     try {
         showModalLoading();
 
-        // Fetch global hero stats (public) and player's turbo hero stats (proxy) in parallel
+        // Fetch global hero stats and player's turbo hero stats in parallel
         const [globalHeroes, playerHeroes] = await Promise.all([
             getHeroStats(),
-            getTurboHeroStatsProxied(state.playerList.myId),
+            getTurboHeroStats(state.playerList.myId),
         ]);
 
         if (!Array.isArray(globalHeroes) || globalHeroes.length === 0) {
@@ -380,73 +313,7 @@ async function openRecommend() {
 
     } catch (err) {
         console.error('[睡了么] Recommend error:', err);
-        if (err instanceof UsageLimitError) {
-            showModalAlert(err.message);
-        } else if (err instanceof AuthError) {
-            showLoginModal({ message: '请先登录后使用英雄推荐功能', onSuccess: () => openRecommend() });
-        } else {
-            showModalAlert('加载英雄推荐失败: ' + (err.message || '未知错误'));
-        }
-    }
-}
-
-// --- Auth & Usage Limit Helpers ---
-
-/**
- * Ensure the user is authenticated before using an advanced feature.
- * Shows login modal if not authenticated.
- * Returns true if the user can proceed, false otherwise.
- */
-async function requireAuthForFeature(featureName, displayName) {
-    if (!isAuthenticated()) {
-        showLoginModal({
-            message: `请先登录后使用「${displayName}」功能`,
-            onSuccess: () => {
-                // Re-trigger the appropriate function after login
-                updateAdvancedFeatureButtons();
-                renderPlayerList('player-list', state.playerList, getListCallbacks());
-            },
-        });
-        return false;
-    }
-    return true;
-}
-
-/**
- * Fetch usage limits from backend and update the advanced feature
- * buttons in the sidebar with remaining counts.
- */
-async function updateAdvancedFeatureButtons() {
-    const authenticated = isAuthenticated();
-
-    if (!authenticated) {
-        updateAdvancedFeatureLabels(false, null);
-        return;
-    }
-
-    try {
-        const token = getToken();
-        if (!token) return;
-
-        const response = await fetch(`${API_BACKEND}/api/usage/my-limits`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-            },
-            credentials: 'include',
-        });
-
-        if (!response.ok) return;
-
-        const data = await response.json();
-        // Store usage data in state for reference
-        state.usageLimits = data.limits;
-        // Update sidebar button labels
-        updateAdvancedFeatureLabels(true, data.limits);
-    } catch (err) {
-        // Non-critical; buttons will show without counts
-        console.warn('[睡了么] Failed to fetch usage limits:', err.message);
-        updateAdvancedFeatureLabels(true, state.usageLimits);
+        showModalAlert('加载英雄推荐失败: ' + (err.message || '未知错误'));
     }
 }
 

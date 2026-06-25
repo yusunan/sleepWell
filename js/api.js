@@ -2,10 +2,9 @@
 // api.js — OpenDota API Client
 // ============================================================
 
-import { API_BASE, API_BACKEND, REQUEST_TIMEOUT, TURBO_MODES } from './config.js';
+import { API_BASE, REQUEST_TIMEOUT, TURBO_MODES } from './config.js';
 import { get as cacheGet, set as cacheSet } from './storage.js';
 import { CACHE_TTL, STORAGE_KEYS } from './config.js';
-import { getToken, refreshAccessToken } from './auth.js';
 
 // --- Internal State ---
 
@@ -45,21 +44,6 @@ export class NetworkError extends Error {
     constructor(message) {
         super(message);
         this.name = 'NetworkError';
-    }
-}
-
-export class AuthError extends Error {
-    constructor(message) {
-        super(message || '请先登录');
-        this.name = 'AuthError';
-    }
-}
-
-export class UsageLimitError extends Error {
-    constructor(message, resetsAt) {
-        super(message || '今日使用次数已达上限');
-        this.name = 'UsageLimitError';
-        this.resetsAt = resetsAt;
     }
 }
 
@@ -200,136 +184,6 @@ export function cancelAll() {
 export function getRateLimitStatus() {
     return { minute: rateLimit.minute, month: rateLimit.month };
 }
-
-// --- Proxy Request (for advanced features) ---
-
-/**
- * Send a request through the backend proxy with JWT auth.
- * Used for advanced features that require usage tracking.
- *
- * @param {string} path - OpenDota API path, e.g. '/players/123/pros'
- * @param {object} [params] - Query parameters
- * @param {object} [opts]
- * @param {string} [opts.feature] - Feature name for usage tracking
- * @param {AbortSignal} [opts.signal] - External abort signal
- * @returns {Promise<any>}
- */
-async function proxyRequest(path, params = {}, opts = {}) {
-    const { feature, signal: extSignal } = opts;
-
-    // Build URL
-    const cleanPath = path.startsWith('/') ? path : '/' + path;
-    const url = new URL('/api/proxy' + cleanPath, API_BACKEND);
-    for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null && v !== '') {
-            url.searchParams.set(k, String(v));
-        }
-    }
-    if (feature) {
-        url.searchParams.set('_feature', feature);
-    }
-
-    const headers = { 'Accept': 'application/json' };
-    const token = getToken();
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // AbortController with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(new Error('timeout')), REQUEST_TIMEOUT);
-
-    if (extSignal) {
-        if (extSignal.aborted) {
-            clearTimeout(timeoutId);
-            throw new DOMException('Aborted', 'AbortError');
-        }
-        extSignal.addEventListener('abort', () => controller.abort(extSignal.reason));
-    }
-
-    const endpointKey = `proxy:${cleanPath}?${url.searchParams.toString()}`;
-    activeControllers.set(endpointKey, controller);
-
-    try {
-        let response = await fetch(url.toString(), {
-            method: 'GET',
-            signal: controller.signal,
-            headers,
-        });
-
-        // Handle 401: try token refresh and retry once
-        if (response.status === 401) {
-            const user = await refreshAccessToken();
-            if (user) {
-                const newToken = getToken();
-                if (newToken) {
-                    headers['Authorization'] = `Bearer ${newToken}`;
-                    // Retry with new token
-                    const retryController = new AbortController();
-                    const retryTimeoutId = setTimeout(() => retryController.abort(new Error('timeout')), REQUEST_TIMEOUT);
-                    try {
-                        response = await fetch(url.toString(), {
-                            method: 'GET',
-                            signal: retryController.signal,
-                            headers,
-                        });
-                    } finally {
-                        clearTimeout(retryTimeoutId);
-                    }
-                }
-            }
-        }
-
-        // Handle 429 (usage limit exceeded)
-        if (response.status === 429) {
-            let data;
-            try { data = await response.json(); } catch { data = {}; }
-            throw new UsageLimitError(
-                data.message || '今日使用次数已达上限',
-                data.resetsAt
-            );
-        }
-
-        // Handle 401 after retry
-        if (response.status === 401) {
-            throw new AuthError('请先登录');
-        }
-
-        // Handle HTTP errors
-        if (response.status === 404) {
-            throw new PlayerNotFoundError(path);
-        }
-        if (!response.ok) {
-            throw new ApiError(`代理请求失败 (${response.status})`, response.status, path);
-        }
-
-        const data = await response.json();
-        return data;
-
-    } catch (err) {
-        if (err instanceof ApiError) throw err;
-        if (err instanceof AuthError) throw err;
-        if (err instanceof UsageLimitError) throw err;
-
-        if (err.name === 'AbortError') {
-            if (controller.signal.reason?.message === 'timeout') {
-                throw new NetworkError('请求超时，请检查网络后重试');
-            }
-            throw err;
-        }
-
-        if (err instanceof TypeError && err.message.includes('fetch')) {
-            throw new NetworkError('网络连接失败，请检查网络后重试');
-        }
-
-        throw new NetworkError(`代理请求失败: ${err.message}`);
-    } finally {
-        clearTimeout(timeoutId);
-        activeControllers.delete(endpointKey);
-    }
-}
-
-// --- Direct API Functions (unchanged, for core dashboard) ---
 
 /**
  * Fetch hero list (id → name mapping).
@@ -542,51 +396,4 @@ export async function getWeeklyMatches(accountId, dateDays) {
         significant: 0,
         date: dateDays,
     });
-}
-
-// --- Proxy API Functions (for advanced features with usage tracking) ---
-
-/**
- * Get player pros via backend proxy (与神同行).
- * Usage feature: pro_players
- */
-export async function getPlayerProsProxied(accountId) {
-    return proxyRequest(`/players/${accountId}/pros`,
-        { game_mode: 23, significant: 0 },
-        { feature: 'pro_players' }
-    );
-}
-
-/**
- * Get all matches via backend proxy (500场数据).
- * Usage feature: all_matches
- */
-export async function getAllMatchesProxied(accountId, limit = 500) {
-    return proxyRequest(`/players/${accountId}/matches`,
-        { game_mode: 23, significant: 0, limit },
-        { feature: 'all_matches' }
-    );
-}
-
-/**
- * Get turbo hero stats via backend proxy (英雄推荐).
- * Usage feature: hero_recommend
- */
-export async function getTurboHeroStatsProxied(accountId, patch) {
-    const params = { game_mode: 23, significant: 0 };
-    if (patch) params.patch = patch;
-    return proxyRequest(`/players/${accountId}/heroes`, params,
-        { feature: 'hero_recommend' }
-    );
-}
-
-/**
- * Get hero matches via backend proxy (英雄推荐 detail).
- * Usage feature: hero_recommend
- */
-export async function getHeroMatchesProxied(accountId, heroId) {
-    return proxyRequest(`/players/${accountId}/matches`,
-        { game_mode: 23, significant: 0, hero_id: heroId, limit: 20 },
-        { feature: 'hero_recommend' }
-    );
 }

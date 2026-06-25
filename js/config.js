@@ -5,30 +5,6 @@
 /** OpenDota API base URL */
 export const API_BASE = 'https://api.opendota.com/api/';
 
-/** Backend API base URL (auth, proxy, usage) */
-export const API_BACKEND = (() => {
-    // Use same origin in production (if proxied via _redirects), or localhost in dev
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-        return 'http://localhost:3000';
-    }
-    // In production, set this to your Railway/Railway custom domain
-    // You can also use a Cloudflare Pages _redirects rule to proxy /api/* to the backend
-    return 'https://sleepwell-api.railway.app';
-})();
-
-/** Authentication configuration */
-export const AUTH = {
-    TOKEN_REFRESH_INTERVAL: 10 * 60 * 1000, // Refresh JWT every 10 minutes
-};
-
-/** Feature names for usage limits */
-export const FEATURES = {
-    META_HEROES: 'meta_heroes',
-    PRO_PLAYERS: 'pro_players',
-    HERO_RECOMMEND: 'hero_recommend',
-    ALL_MATCHES: 'all_matches',
-};
-
 /** Steam CDN for hero/rank images */
 export const STEAM_CDN = 'https://cdn.cloudflare.steamstatic.com';
 
