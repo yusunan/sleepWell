@@ -1204,14 +1204,14 @@ export function renderPlayerList(containerId, playerList, callbacks) {
             <div class="player-list-section">
                 <div class="player-list-label collapsible-header" data-action="toggle-collapse" data-target="collapse-advanced">
                     <span class="collapse-arrow open" data-target="collapse-advanced">▾</span>
-                    ⚡ 高级功能
+                    ⚡ 高级功能 <span class="auth-feature-label" id="auth-feature-hint"></span>
                 </div>
                 <div class="collapsible-body open" id="collapse-advanced">
                     <div class="advanced-buttons">
-                        <button class="btn btn-sm btn-advanced" data-action="open-meta">📊 版本答案</button>
-                        <button class="btn btn-sm btn-advanced" data-action="open-pros">👑 与神同行</button>
-                        <button class="btn btn-sm btn-advanced" data-action="open-recommend">🎯 英雄推荐</button>
-                        <button class="btn btn-sm btn-advanced" data-action="open-all-matches">📋 500场数据</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-meta" data-feature="meta_heroes">📊 版本答案</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-pros" data-feature="pro_players">👑 与神同行</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-recommend" data-feature="hero_recommend">🎯 英雄推荐</button>
+                        <button class="btn btn-sm btn-advanced" data-action="open-all-matches" data-feature="all_matches">📋 500场数据</button>
                     </div>
                 </div>
             </div>
@@ -1222,8 +1222,11 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         </div>
     `;
 
-    // Event delegation
-    container.addEventListener('click', (e) => {
+    // Event delegation — remove old handler first to prevent accumulation
+    if (container._playerListClickHandler) {
+        container.removeEventListener('click', container._playerListClickHandler);
+    }
+    const clickHandler = (e) => {
         const target = e.target;
         const action = target.dataset.action;
         if (!action) return;
@@ -1325,7 +1328,9 @@ export function renderPlayerList(containerId, playerList, callbacks) {
         if (action === 'open-all-matches' && callbacks.onOpenAllMatches) {
             callbacks.onOpenAllMatches();
         }
-    });
+    };
+    container._playerListClickHandler = clickHandler;
+    container.addEventListener('click', clickHandler);
 
     // Enter key support
     document.getElementById('my-id-input')?.addEventListener('keydown', (e) => {
@@ -2506,4 +2511,71 @@ function bindModalEvents(container) {
         }
     };
     document.addEventListener('keydown', onKey);
+}
+
+// --- Auth & Usage Limit UI ---
+
+/**
+ * Update the advanced feature button labels in the sidebar.
+ * Shows usage counts for authenticated users, login prompt for guests.
+ *
+ * @param {boolean} authenticated - Whether the user is logged in
+ * @param {object|null} usageLimits - Usage limits data from /api/usage/my-limits
+ *                                    { feature_name: { max, used, period } }
+ */
+export function updateAdvancedFeatureLabels(authenticated, usageLimits) {
+    const hintEl = document.getElementById('auth-feature-hint');
+
+    if (!authenticated) {
+        if (hintEl) hintEl.textContent = '(需登录)';
+        // Reset button text
+        const buttons = document.querySelectorAll('[data-feature]');
+        const defaultLabels = {
+            meta_heroes: '📊 版本答案',
+            pro_players: '👑 与神同行',
+            hero_recommend: '🎯 英雄推荐',
+            all_matches: '📋 500场数据',
+        };
+        buttons.forEach(btn => {
+            const feature = btn.dataset.feature;
+            if (defaultLabels[feature]) {
+                btn.textContent = defaultLabels[feature];
+            }
+            btn.classList.remove('btn-advanced-exhausted');
+            btn.title = '请先登录后使用';
+        });
+        return;
+    }
+
+    if (hintEl) hintEl.textContent = '';
+
+    const buttons = document.querySelectorAll('[data-feature]');
+    buttons.forEach(btn => {
+        const feature = btn.dataset.feature;
+        const defaultLabels = {
+            meta_heroes: '📊 版本答案',
+            pro_players: '👑 与神同行',
+            hero_recommend: '🎯 英雄推荐',
+            all_matches: '📋 500场数据',
+        };
+
+        if (!usageLimits || !usageLimits[feature]) {
+            btn.textContent = defaultLabels[feature] || btn.textContent;
+            btn.classList.remove('btn-advanced-exhausted');
+            btn.title = '';
+            return;
+        }
+
+        const { max, used } = usageLimits[feature];
+
+        if (used >= max) {
+            btn.textContent = `${defaultLabels[feature]} (已用完)`;
+            btn.classList.add('btn-advanced-exhausted');
+            btn.title = '今日使用次数已用完，请明日再试';
+        } else {
+            btn.textContent = `${defaultLabels[feature]} (${used}/${max})`;
+            btn.classList.remove('btn-advanced-exhausted');
+            btn.title = `今日剩余 ${max - used} 次`;
+        }
+    });
 }

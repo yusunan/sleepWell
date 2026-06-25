@@ -2,9 +2,36 @@
 
 ## Overview
 
-"睡了么" is a pure frontend Dota 2 Turbo mode sleep analyzer. User inputs Steam32 ID, browser calls OpenDota API directly, evaluates sleep quality based on the last match between 20:00-02:00.
+"睡了么" is a Dota 2 Turbo mode sleep analyzer. User inputs Steam32 ID, browser calls OpenDota API directly (or via backend proxy for advanced features), evaluates sleep quality based on the last match between 20:00-02:00.
 
-Deployed at: `https://sleepwell-887.pages.dev` (Cloudflare Pages)
+**Frontend**: `https://sleepwell-887.pages.dev` (Cloudflare Pages)
+**Backend**: Node.js + Express API server (Alibaba Cloud ECS or Railway)
+
+## Architecture
+
+```
+[Cloudflare Pages — Frontend SPA]
+    │
+    ├──(direct fetch)──> [OpenDota API]        ← public data (heroes, heroStats)
+    │
+    └──(JWT + proxy)──> [Backend API Server]   ← auth + usage tracking
+                              │
+                              ├──> [MySQL]     ← users, invite_codes, usage
+                              └──> [OpenDota]  ← proxied advanced features
+```
+
+### Auth System
+- JWT access tokens (15 min, in-memory), Refresh tokens (7 days, httpOnly cookie)
+- Invite-code registration required
+- 4 advanced features require login + have daily usage limits (free: 3/day each)
+
+### Advanced Features (require auth)
+| Feature | feature_name | Free Limit |
+|---------|-------------|------------|
+| 版本答案 | meta_heroes | 3/day |
+| 与神同行 | pro_players | 3/day |
+| 英雄推荐 | hero_recommend | 3/day |
+| 500场数据 | all_matches | 3/day |
 
 ## Key Technical Decisions
 
@@ -49,31 +76,76 @@ dd2/
 ├── _headers            # Cloudflare Pages CDN cache policy
 ├── version.txt         # App version number for cache-busting
 ├── LICENSE             # BSL 1.1
-├── css/style.css       # Dark theme, responsive, sidebar overlay, modal
+├── css/style.css       # Dark theme, responsive, sidebar overlay, modal, auth UI
 ├── js/
-│   ├── config.js       # API_BASE, STORAGE_KEYS, PATCH_VERSIONS, RANK_MEDALS, CACHE_VERSION
+│   ├── config.js       # API_BASE, API_BACKEND, STORAGE_KEYS, AUTH, FEATURES
 │   ├── storage.js      # localStorage with TTL, namespace 'dd2_'
-│   ├── api.js          # OpenDota client: request(), getHeroes(), getPlayer(),
-│   │                   #   getRecentMatches(), getMatchesWithPlayer(),
-│   │                   #   getTurboCounts(), getTurboTotals(),
-│   │                   #   getTurboWinLoss(), getTurboHeroStats(), fetchTurboStats(),
-│   │                   #   getPeers(), getTopPlayers(), getPlayerPros()
+│   ├── api.js          # OpenDota client + backend proxy helper + error types
+│   │                   #   request(), proxyRequest(), getHeroes(), getPlayer(),
+│   │                   #   getPlayerPros() / getPlayerProsProxied(),
+│   │                   #   getAllMatches() / getAllMatchesProxied(), etc.
+│   ├── auth.js         # JWT memory management, login/register/logout/refresh
+│   ├── auth-ui.js      # Login/register modals, header user controls
 │   ├── heroNames.js    # Chinese hero name mapping (internal_name → 中文)
-│   ├── sleep.js        # evaluateSleep(), getSleepMessage(), getCurrentSessionAdvice(),
-│   │                   #   isPlayerInactive()
+│   ├── sleep.js        # evaluateSleep(), getSleepMessage(), getCurrentSessionAdvice()
 │   ├── charts.js       # createWinRateTrend(), createHeroPerformanceChart(),
 │   │                   #   createMmrTrendChart()
-│   ├── ui.js           # All DOM rendering: renderPlayerList, renderSleepCard,
-│   │                   #   renderSessionAdvice, renderTeammateInactiveCard,
-│   │                   #   renderTurboSummary, renderHeroTable, renderRecentMatches,
-│   │                   #   renderPeersTable, renderPatchSelector, renderPlayerProfile,
-│   │                   #   renderLeaderboardModal, renderProsModal, renderProMatchRow,
-│   │                   #   showModalLoading, showLoading, showError, showEmpty, closeModal
+│   ├── ui.js           # All DOM rendering + updateAdvancedFeatureLabels()
 │   └── app.js          # Main controller: init(), loadDashboard(), player management,
-│                       #   patch filter, data computation, loadPeers(),
-│                       #   openLeaderboard(), openPros()
+│                       #   auth guards for advanced features, usage limit updates
+├── server/
+│   ├── server.js       # Express entry: middleware chain, route mounting
+│   ├── package.json    # Dependencies (express, mysql2, bcryptjs, jsonwebtoken, etc.)
+│   ├── .env.example    # Environment variable template
+│   ├── db/
+│   │   ├── pool.js     # mysql2 connection pool (URI or param mode)
+│   │   ├── schema.sql  # 5 tables + seed data
+│   │   └── init.js     # Database initialization script
+│   ├── middleware/
+│   │   ├── auth.js     # JWT verification (requireAuth, optionalAuth)
+│   │   ├── admin.js    # Admin role check
+│   │   └── usage.js    # Usage limit check + record
+│   ├── routes/
+│   │   ├── auth.js     # register/login/refresh/logout/me
+│   │   ├── invites.js  # Admin invite code CRUD
+│   │   ├── proxy.js    # OpenDota proxy with URL validation + caching
+│   │   └── usage.js    # Usage limits query
+│   └── utils/
+│       ├── jwt.js      # JWT sign/verify, refresh token CRUD, breach detection
+│       ├── invite.js   # Invite code generation + atomic validation
+│       └── validation.js # Input sanitization, proxy path/param validation
+├── deploy/
+│   ├── setup.sh        # Alibaba Cloud ECS auto-setup script
+│   ├── nginx.conf      # Nginx reverse proxy config
+│   ├── ecosystem.config.cjs  # PM2 process manager config
+│   └── create-admin.js # Script to create initial admin user
 └── README.md
 ```
+
+## Deployment
+
+### Frontend (Cloudflare Pages)
+- Push to GitHub → auto-deploy. No build step needed.
+- Update `js/config.js` `API_BACKEND` to point to your backend domain.
+
+### Backend (Alibaba Cloud ECS)
+1. Buy ECS (2vCPU/2GB, Ubuntu 22.04) + domain + ICP filing
+2. Point domain DNS A record to server IP
+3. Copy project to server, run `deploy/setup.sh`
+4. Create admin: `node deploy/create-admin.js <username> <password>`
+5. Get SSL: `certbot --nginx -d api.your-domain.com`
+6. Admin generates invite codes via `POST /api/invites`
+
+### Environment Variables (server/.env)
+| Variable | Description |
+|----------|-------------|
+| MYSQL_HOST | MySQL host (127.0.0.1 for local) |
+| MYSQL_PORT | MySQL port (3306) |
+| MYSQL_USER | MySQL user |
+| MYSQL_PASSWORD | MySQL password |
+| MYSQL_DATABASE | Database name (sleepwell) |
+| JWT_SECRET | Random 256-bit hex string |
+| CORS_ORIGIN | Cloudflare Pages URL |
 
 ## State Management
 
@@ -89,6 +161,7 @@ dd2/
 - `isEnemy`: whether current view is an enemy player
 - `isTeammate`: whether current view is a teammate
 - `currentViewId`: the Steam32 ID currently being viewed
+- `usageLimits`: `{ feature_name: { max, used, period } }` — from `/api/usage/my-limits`
 
 ## Cache
 
